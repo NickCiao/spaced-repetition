@@ -34,16 +34,7 @@ The tool serves four loops, in decreasing frequency:
 
 One deployable artifact: a Cloudflare Worker (TypeScript) with a D1 database. D1 is canonical for everything — prompts, sources, captures, the review log, settings. There is no CLI, no local daemon, no second store, and nothing on any personal machine that must be alive for the system to work.
 
-```mermaid
-flowchart LR
-    P["Phone — PWA, share sheet, email link"] --> W
-    M["Mac — browser, email link"] --> W
-    subgraph CF ["Cloudflare (free tier)"]
-      W["Worker — review · capture · inbox · settings · cron"] --> D[("D1 — canonical store")]
-    end
-    W -. "export.zip / import (dry-run → confirm)" .-> F["Local markdown — refactoring & backup"]
-    W -- "daily reminder via Resend" --> P
-```
+![One Cloudflare Worker backed by D1 serves phone and Mac; occasional export/import to local markdown; a daily reminder email starts the review loop](architecture.svg)
 
 The web app is server-rendered HTML with minimal vanilla JS, mobile-first. The capture page is an installable PWA with a cached shell and an offline queue. The only runtime dependency is `ts-fsrs`; email goes through Resend behind a ~20-line provider interface. Running cost: $0.
 

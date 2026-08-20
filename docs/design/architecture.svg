@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 330" role="img" aria-label="One Cloudflare Worker backed by D1 serves phone and Mac; occasional export and import to local markdown; a daily reminder email starts the review loop" font-family="'Helvetica Neue', Arial, sans-serif">
+  <title>Architecture: one worker, one canonical store</title>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444444"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="840" height="330" fill="#ffffff"/>
+
+  <!-- Cloudflare group -->
+  <rect x="260" y="36" width="244" height="252" rx="8" fill="#f6f6f4" stroke="#d8d8d4"/>
+  <text x="382" y="58" text-anchor="middle" font-size="11" letter-spacing="1.5" fill="#8a8a86">CLOUDFLARE · FREE TIER</text>
+
+  <!-- Worker -->
+  <rect x="280" y="76" width="204" height="80" rx="6" fill="#ffffff" stroke="#98938c"/>
+  <text x="382" y="102" text-anchor="middle" font-size="13" font-weight="600" fill="#1c1c1c">Worker</text>
+  <text x="382" y="120" text-anchor="middle" font-size="10.5" fill="#666666">review · capture · inbox</text>
+  <text x="382" y="134" text-anchor="middle" font-size="10.5" fill="#666666">settings · email cron</text>
+
+  <!-- D1 -->
+  <rect x="280" y="208" width="204" height="52" rx="6" fill="#f9f1de" stroke="#ad8a3b"/>
+  <text x="382" y="228" text-anchor="middle" font-size="13" font-weight="600" fill="#1c1c1c">D1</text>
+  <text x="382" y="244" text-anchor="middle" font-size="10.5" fill="#7a6327">canonical store</text>
+  <line x1="382" y1="156" x2="382" y2="203" stroke="#444444" marker-end="url(#arr)"/>
+  <text x="392" y="184" text-anchor="start" font-size="10.5" fill="#555555">reads / writes</text>
+
+  <!-- Devices -->
+  <rect x="24" y="64" width="156" height="60" rx="6" fill="#ffffff" stroke="#98938c"/>
+  <text x="102" y="86" text-anchor="middle" font-size="13" font-weight="600" fill="#1c1c1c">Phone</text>
+  <text x="102" y="104" text-anchor="middle" font-size="10.5" fill="#666666">PWA · share sheet · email</text>
+
+  <rect x="24" y="196" width="156" height="60" rx="6" fill="#ffffff" stroke="#98938c"/>
+  <text x="102" y="218" text-anchor="middle" font-size="13" font-weight="600" fill="#1c1c1c">Mac</text>
+  <text x="102" y="236" text-anchor="middle" font-size="10.5" fill="#666666">browser · email</text>
+
+  <!-- Device edges: identical labels are the point — every loop closes on either device -->
+  <line x1="180" y1="94" x2="276" y2="102" stroke="#444444" marker-end="url(#arr)"/>
+  <text x="228" y="84" text-anchor="middle" font-size="10.5" fill="#444444">capture · review · refine</text>
+
+  <line x1="180" y1="226" x2="276" y2="146" stroke="#444444" marker-end="url(#arr)"/>
+  <text x="226" y="176" text-anchor="middle" font-size="10.5" fill="#444444">capture · review · refine</text>
+
+  <!-- Reminder email -->
+  <path d="M 382,74 C 360,26 160,22 104,60" fill="none" stroke="#666666" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <text x="240" y="18" text-anchor="middle" font-size="10.5" fill="#555555">daily reminder email · Resend</text>
+
+  <!-- Local markdown -->
+  <rect x="660" y="124" width="160" height="76" rx="6" fill="#ffffff" stroke="#98938c"/>
+  <text x="740" y="148" text-anchor="middle" font-size="13" font-weight="600" fill="#1c1c1c">Local markdown</text>
+  <text x="740" y="166" text-anchor="middle" font-size="10.5" fill="#666666">refactor sessions</text>
+  <text x="740" y="180" text-anchor="middle" font-size="10.5" fill="#666666">manual backup</text>
+
+  <line x1="484" y1="120" x2="655" y2="142" stroke="#666666" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <text x="570" y="112" text-anchor="middle" font-size="10.5" fill="#555555">export.zip</text>
+
+  <line x1="660" y1="168" x2="489" y2="148" stroke="#666666" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <text x="570" y="188" text-anchor="middle" font-size="10.5" fill="#555555">import · dry-run → confirm</text>
+
+  <!-- Key -->
+  <text x="420" y="314" text-anchor="middle" font-size="10.5" fill="#777777">solid — interactive · dashed — occasional / async</text>
+</svg>
