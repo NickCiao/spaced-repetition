@@ -34,7 +34,12 @@ The tool serves four loops, in decreasing frequency:
 
 One deployable artifact: a Cloudflare Worker (TypeScript) with a D1 database and an R2 bucket for image assets. D1 is canonical for everything — prompts, sources, captures, the review log, settings — with R2 holding the images prompts reference. There is no CLI, no local daemon, and nothing on any personal machine that must be alive for the system to work.
 
-![One Cloudflare Worker backed by D1 and R2 serves phone and Mac; occasional export/import to local markdown; a daily reminder email starts the review loop](architecture.svg)
+![One Cloudflare Worker backed by D1 and R2 serves phone and Mac; occasional export/import to local markdown; a daily reminder email starts the review loop](architecture.png)
+
+<!-- Diagram source: architecture.svg. Regenerate the PNG after editing it:
+     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --disable-gpu \
+       --force-device-scale-factor=2 --window-size=900,368 --screenshot=architecture.png architecture.svg -->
+
 
 The web app is server-rendered HTML with minimal vanilla JS, mobile-first. The capture page is an installable PWA with a cached shell and an offline queue. Prompt bodies are markdown — code blocks, images, and math — rendered by a small markdown renderer plus self-hosted KaTeX (no CDN, so rendering keeps working for years; raw HTML is escaped, never rendered). Runtime dependencies: `ts-fsrs`, the markdown renderer, KaTeX as static assets. Email goes through Resend behind a ~20-line provider interface. Running cost: $0 on the Workers, D1, and R2 free tiers.
 
