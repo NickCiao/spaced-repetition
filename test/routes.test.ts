@@ -120,3 +120,40 @@ describe("review", () => {
     expect(row?.flag_note).toBe("flagged");
   });
 });
+
+describe("capture", () => {
+  it("POST /api/capture stores a pending capture", async () => {
+    const res = await POST("/api/capture", { text: "worth remembering", url: "https://ex.com/a", title: "Ex" });
+    expect(res.status).toBe(200);
+    const { id } = await res.json() as { id: string };
+    const row = await env.DB.prepare("SELECT * FROM captures WHERE id = ?").bind(id).first();
+    expect(row?.status).toBe("pending");
+    expect(row?.title).toBe("Ex");
+  });
+
+  it("rejects empty text", async () => {
+    expect((await POST("/api/capture", { text: "  " })).status).toBe(400);
+  });
+
+  it("lists today's captures", async () => {
+    await POST("/api/capture", { text: "today-item" });
+    const res = await SELF.fetch("http://sr/api/captures/today", AUTH);
+    const { items } = await res.json() as { items: { text: string }[] };
+    expect(items.some(i => i.text === "today-item")).toBe(true);
+  });
+
+  it("source autocomplete matches by substring", async () => {
+    await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Thinking in Bets', NULL, '{}', ?)")
+      .bind(newId(), nowIso()).run();
+    const res = await SELF.fetch("http://sr/api/sources?q=bets", AUTH);
+    const { items } = await res.json() as { items: { name: string }[] };
+    expect(items.some(i => i.name === "Thinking in Bets")).toBe(true);
+  });
+
+  it("serves capture page and sw.js (sw without auth)", async () => {
+    expect((await SELF.fetch("http://sr/capture", AUTH)).status).toBe(200);
+    const sw = await SELF.fetch("http://sr/sw.js");
+    expect(sw.status).toBe(200);
+    expect(sw.headers.get("Content-Type") ?? "").toContain("javascript");
+  });
+});
