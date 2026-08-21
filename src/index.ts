@@ -4,6 +4,8 @@ import { gradeApi, reviewPage } from "./routes/review";
 import { captureApi, capturePage, capturesToday, sourcesApi } from "./routes/capture";
 import { serveAsset, uploadAsset } from "./routes/assets";
 import { deleteCapture, inboxPage, previewApi, refineApi, refinePage } from "./routes/inbox";
+import { browseIndex, browseSource, promptApi, promptForm } from "./routes/browse";
+import { settingsApi, settingsPage } from "./routes/settings";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -27,6 +29,14 @@ export default {
     const delMatch = url.pathname.match(/^\/api\/capture\/([a-z0-9]{10})\/delete$/);
     if (delMatch && request.method === "POST") return deleteCapture(delMatch[1], env);
     if (url.pathname === "/api/preview" && request.method === "POST") return previewApi(request, env);
+    if (url.pathname === "/browse" && request.method === "GET") return browseIndex(env);
+    const srcMatch = url.pathname.match(/^\/browse\/([a-z0-9]{10})$/);
+    if (srcMatch && request.method === "GET") return browseSource(srcMatch[1], env);
+    const pMatch = url.pathname.match(/^\/prompt\/(new|[a-z0-9]{10})$/);
+    if (pMatch && request.method === "GET") return promptForm(pMatch[1], request, env);
+    if (url.pathname === "/api/prompt" && request.method === "POST") return promptApi(request, env);
+    if (url.pathname === "/settings" && request.method === "GET") return settingsPage(env);
+    if (url.pathname === "/api/settings" && request.method === "POST") return settingsApi(request, env);
     return new Response("not found", { status: 404 });
   },
 

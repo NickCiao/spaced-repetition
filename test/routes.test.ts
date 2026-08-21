@@ -228,3 +228,49 @@ describe("inbox and refine", () => {
     expect(n?.n).toBe(1);
   });
 });
+
+describe("browse, prompt edit, settings", () => {
+  it("editing a prompt preserves its schedule", async () => {
+    const pid = await seedReviewPrompt("before-edit");
+    const before = await env.DB.prepare("SELECT due, source_id FROM prompts WHERE id = ?").bind(pid).first();
+    const res = await POST("/api/prompt", {
+      id: pid, source_id: before!.source_id, kind: "qa",
+      question: "after-edit?", answer: "new answer", clear_flag: true
+    });
+    expect(res.status).toBe(200);
+    const after = await env.DB.prepare("SELECT question, due, flag_note FROM prompts WHERE id = ?").bind(pid).first();
+    expect(after?.question).toBe("after-edit?");
+    expect(after?.due).toBe(before?.due);
+    expect(after?.flag_note).toBeNull();
+  });
+
+  it("creates a prompt directly under a source (new card)", async () => {
+    const sid = newId();
+    await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Direct Src', NULL, '{}', ?)")
+      .bind(sid, nowIso()).run();
+    const res = await POST("/api/prompt", { source_id: sid, kind: "qa", question: "direct?", answer: "yes" });
+    const { id } = await res.json() as { id: string };
+    const row = await env.DB.prepare("SELECT reps, state FROM prompts WHERE id = ?").bind(id).first();
+    expect(row?.reps).toBe(0);
+    const html = await (await SELF.fetch(`http://sr/browse/${sid}`, AUTH)).text();
+    expect(html).toContain("direct?");
+    expect(html).toContain(`/?source=${sid}`);
+  });
+
+  it("browse index lists sources with counts", async () => {
+    const html = await (await SELF.fetch("http://sr/browse", AUTH)).text();
+    expect(html).toContain("Direct Src");
+  });
+
+  it("settings round-trip and validation", async () => {
+    const ok = await POST("/api/settings", { session_cap: 25, desired_retention: 0.85, email_hour: 8, timezone: "America/New_York" });
+    expect(ok.status).toBe(200);
+    const html = await (await SELF.fetch("http://sr/settings", AUTH)).text();
+    expect(html).toContain("25");
+    expect((await POST("/api/settings", { session_cap: 0, desired_retention: 0.9, email_hour: 7, timezone: "America/New_York" })).status).toBe(400);
+    expect((await POST("/api/settings", { session_cap: 20, desired_retention: 0.5, email_hour: 7, timezone: "America/New_York" })).status).toBe(400);
+    expect((await POST("/api/settings", { session_cap: 20, desired_retention: 0.9, email_hour: 7, timezone: "Not/AZone" })).status).toBe(400);
+    // restore defaults for other tests
+    await POST("/api/settings", { session_cap: 20, desired_retention: 0.9, email_hour: 7, timezone: "America/Los_Angeles" });
+  });
+});
