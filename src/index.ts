@@ -2,6 +2,7 @@ import type { Env } from "./env.d";
 import { requireAuth } from "./auth";
 import { gradeApi, reviewPage } from "./routes/review";
 import { captureApi, capturePage, capturesToday, sourcesApi } from "./routes/capture";
+import { serveAsset, uploadAsset } from "./routes/assets";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -15,6 +16,9 @@ export default {
     if (url.pathname === "/api/capture" && request.method === "POST") return captureApi(request, env);
     if (url.pathname === "/api/captures/today" && request.method === "GET") return capturesToday(env);
     if (url.pathname === "/api/sources" && request.method === "GET") return sourcesApi(request, env);
+    if (url.pathname === "/api/assets" && request.method === "POST") return uploadAsset(request, env);
+    const assetMatch = url.pathname.match(/^\/assets\/([0-9a-f]{32})$/);
+    if (assetMatch && request.method === "GET") return serveAsset(assetMatch[1], env);
     return new Response("not found", { status: 404 });
   },
 
