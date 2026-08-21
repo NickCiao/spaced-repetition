@@ -10,6 +10,8 @@ What good looks like: a review practice that remains sustainable for years. The 
 
 The design draws on Matuschak and Nielsen's mnemonic-medium work: retrieval practice as the mechanism, prompts as first-class objects of authorship, review friction near zero, and reminders that respect attention. It adapts those principles for a single-user personal tool rather than reproducing any existing system.
 
+Positioning, briefly (the README owns the full story): Orbit — Matuschak's open-source platform — works from the *writer's* side, equipping authors to embed prompts in mnemonic-medium texts, so it helps only with texts written that way. Anki and Mochi work from the reader's side but assume a sitting: app open, attention on crafting cards. This tool is reader-side and separates **capture** (seconds, mid-reading, no structure) from **refine** (deliberate prompt-writing, later). That split is the differentiator; no existing tool offers it.
+
 ## 2. The practice
 
 The tool serves four loops, in decreasing frequency:
