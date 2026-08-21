@@ -120,7 +120,7 @@ Responsibilities: `scheduler`, `markdown`, `format`, `email.decideReminder` are 
 {
   "name": "spaced-repetition",
   "main": "src/index.ts",
-  "compatibility_date": "2026-08-01",
+  "compatibility_date": "2025-09-06",
   "assets": { "directory": "./public", "binding": "ASSETS" },
   "d1_databases": [
     { "binding": "DB", "database_name": "sr", "database_id": "REPLACE-AT-DEPLOY", "migrations_dir": "migrations" }
