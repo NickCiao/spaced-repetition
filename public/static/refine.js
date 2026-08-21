@@ -64,18 +64,23 @@
   });
 
   async function save() {
-    const cards = [...document.querySelectorAll("#forms .card")].map(collect)
-      .filter((p) => p.question.trim());
-    const res = await fetch("/api/refine", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        capture_id: root.dataset.capture,
-        source: { name: document.getElementById("src-name").value, url: root.dataset.sourceUrl || undefined },
-        prompts: cards
-      })
-    });
-    if (res.ok) location.href = "/inbox";
-    else document.getElementById("flash").textContent = (await res.json()).error;
+    const btn = document.getElementById("save");
+    if (btn.disabled) return; // double-click guard — the server claim is the real defense
+    btn.disabled = true;
+    try {
+      const cards = [...document.querySelectorAll("#forms .card")].map(collect)
+        .filter((p) => p.question.trim());
+      const res = await fetch("/api/refine", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          capture_id: root.dataset.capture,
+          source: { name: document.getElementById("src-name").value, url: root.dataset.sourceUrl || undefined },
+          prompts: cards
+        })
+      });
+      if (res.ok) { location.href = "/inbox"; return; }
+      document.getElementById("flash").textContent = (await res.json()).error;
+    } finally { btn.disabled = false; }
   }
 
   render();

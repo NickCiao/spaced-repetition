@@ -73,43 +73,56 @@ export async function refineApi(request: Request, env: Env): Promise<Response> {
     if (p.kind === "qa" && !p.answer?.trim())
       return Response.json({ error: "answer required for qa" }, { status: 400 });
   }
+  if (!b.source.id && !b.source.name?.trim()) {
+    return Response.json({ error: "source name required" }, { status: 400 });
+  }
   const cap = await env.DB.prepare("SELECT * FROM captures WHERE id = ?").bind(b.capture_id).first<CaptureRow>();
   if (!cap) return Response.json({ error: "unknown capture" }, { status: 404 });
-  if (cap.status !== "pending") return Response.json({ error: "already consumed" }, { status: 409 });
 
-  const ts = nowIso();
-  let sourceId = b.source.id ?? null;
-  if (!sourceId) {
-    if (!b.source.name?.trim()) return Response.json({ error: "source name required" }, { status: 400 });
-    const existing = await env.DB.prepare("SELECT id FROM sources WHERE name = ?")
-      .bind(b.source.name.trim()).first<SourceRow>();
-    if (existing) sourceId = existing.id;
-    else {
-      sourceId = newId();
-      await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, ?, ?, '{}', ?)")
-        .bind(sourceId, b.source.name.trim(), b.source.url || null, ts).run();
+  // Atomic claim: exactly one concurrent refine can consume a capture.
+  const claim = await env.DB.prepare(
+    "UPDATE captures SET status = 'consumed' WHERE id = ? AND status = 'pending'"
+  ).bind(cap.id).run();
+  if (!claim.meta.changes) return Response.json({ error: "already consumed" }, { status: 409 });
+
+  try {
+    const ts = nowIso();
+    let sourceId = b.source.id ?? null;
+    if (!sourceId) {
+      const existing = await env.DB.prepare("SELECT id FROM sources WHERE name = ?")
+        .bind(b.source.name!.trim()).first<SourceRow>();
+      if (existing) sourceId = existing.id;
+      else {
+        sourceId = newId();
+        await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, ?, ?, '{}', ?)")
+          .bind(sourceId, b.source.name!.trim(), b.source.url || null, ts).run();
+      }
     }
-  }
 
-  const posRow = await env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS p FROM prompts WHERE source_id = ?")
-    .bind(sourceId).first<{ p: number }>();
-  let pos = (posRow?.p ?? -1) + 1;
+    const posRow = await env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS p FROM prompts WHERE source_id = ?")
+      .bind(sourceId).first<{ p: number }>();
+    let pos = (posRow?.p ?? -1) + 1;
 
-  const ids: string[] = [];
-  for (const p of b.prompts) {
-    const id = newId();
-    const f = newCardFields(new Date());
-    await env.DB.prepare(
-      `INSERT INTO prompts (id, source_id, kind, question, answer, position, created_at, updated_at,
-        due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(id, sourceId, p.kind, p.question, p.answer ?? "", pos++, ts, ts,
-           f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
-           f.reps, f.lapses, f.state, f.last_review).run();
-    ids.push(id);
+    const ids: string[] = [];
+    const stmts = b.prompts.map((p) => {
+      const id = newId();
+      ids.push(id);
+      const f = newCardFields(new Date());
+      return env.DB.prepare(
+        `INSERT INTO prompts (id, source_id, kind, question, answer, position, created_at, updated_at,
+          due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(id, sourceId, p.kind, p.question, p.answer ?? "", pos++, ts, ts,
+             f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
+             f.reps, f.lapses, f.state, f.last_review);
+    });
+    await env.DB.batch(stmts); // all-or-nothing
+    return Response.json({ ok: true, prompt_ids: ids });
+  } catch {
+    // Give the capture back so nothing is stranded half-consumed.
+    await env.DB.prepare("UPDATE captures SET status = 'pending' WHERE id = ?").bind(cap.id).run();
+    return Response.json({ error: "refine failed" }, { status: 500 });
   }
-  await env.DB.prepare("UPDATE captures SET status = 'consumed' WHERE id = ?").bind(cap.id).run();
-  return Response.json({ ok: true, prompt_ids: ids });
 }
 
 export async function deleteCapture(id: string, env: Env): Promise<Response> {

@@ -218,4 +218,13 @@ describe("inbox and refine", () => {
     expect(body.questionHtml).toContain("[…]");
     expect(body.answerHtml).toContain("this");
   });
+
+  it("concurrent refines of one capture create prompts exactly once", async () => {
+    const cid = await seedCapture("race-me");
+    const body = { capture_id: cid, source: { name: "Race Src" }, prompts: [{ kind: "qa", question: "rq?", answer: "ra" }] };
+    const [r1, r2] = await Promise.all([POST("/api/refine", body), POST("/api/refine", body)]);
+    expect([r1.status, r2.status].sort()).toEqual([200, 409]);
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM prompts WHERE question = 'rq?'").first();
+    expect(n?.n).toBe(1);
+  });
 });
