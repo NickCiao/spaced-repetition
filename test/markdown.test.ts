@@ -25,9 +25,18 @@ describe("renderMarkdown", () => {
     expect(html).not.toContain("<em>");
   });
 
-  it("rewrites relative asset refs to /assets/<id>", () => {
-    const html = renderMarkdown("![diagram](assets/abc123def0)");
-    expect(html).toContain('src="/assets/abc123def0"');
+  it("rewrites relative asset refs to /assets/<id> (32-hex ids only)", () => {
+    const id = "abc123def0abc123def0abc123def012";
+    expect(renderMarkdown(`![diagram](assets/${id})`)).toContain(`src="/assets/${id}"`);
+  });
+
+  it("hostile hrefs cannot inject markup or scripts", () => {
+    const img = renderMarkdown('![x](assets/a"onerror="alert(1))');
+    expect(img).not.toContain("<img");
+    expect(img).not.toContain('onerror="'); // escaped output contains onerror=&quot; which is inert
+    const link = renderMarkdown("[click](javascript:alert(1))");
+    expect(link).not.toContain("javascript:");
+    expect(link).not.toContain("<a ");
   });
 });
 
@@ -47,5 +56,12 @@ describe("cloze", () => {
   it("qa passthrough", () => {
     expect(renderPromptQuestion("qa", "What?")).toContain("What?");
     expect(renderPromptAnswer("qa", "What?", "This.")).toContain("This.");
+  });
+
+  it("literal U+2063 in input cannot corrupt placeholder reinsertion", () => {
+    const html = renderPromptQuestion("cloze", "⁣SR0⁣ literal and {{secret}}");
+    expect(html).toContain("literal");
+    expect(html).not.toContain("secret");
+    expect((html.match(/\[…\]/g) ?? []).length).toBe(1);
   });
 });
