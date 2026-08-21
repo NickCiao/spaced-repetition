@@ -1,5 +1,6 @@
 import type { PromptRow } from "./db";
 import { retrievability } from "./scheduler";
+import { endOfLocalDay } from "./clock";
 import { renderPromptAnswer, renderPromptQuestion } from "./markdown";
 
 export type SessionCard = {
@@ -14,21 +15,22 @@ type Joined = PromptRow & { source_name: string; source_url: string | null };
 
 export async function buildSession(
   db: D1Database,
-  opts: { ahead: boolean; sourceId: string | null; cap: number },
+  opts: { ahead: boolean; sourceId: string | null; cap: number; tz: string },
   now: Date
 ): Promise<Session> {
-  const nowIso = now.toISOString();
+  // "Due" means due on today's local calendar day (spec §6), so the cutoff is local midnight.
+  const cutoff = endOfLocalDay(now, opts.tz).toISOString();
   const sourceCond = opts.sourceId ? "AND p.source_id = ?" : "";
-  const bindings = opts.sourceId ? [nowIso, opts.sourceId] : [nowIso];
+  const bindings = opts.sourceId ? [cutoff, opts.sourceId] : [cutoff];
 
   const dueSql = `
     SELECT p.*, s.name AS source_name, s.url AS source_url
     FROM prompts p JOIN sources s ON s.id = p.source_id
-    WHERE p.retired = 0 AND p.due <= ? ${sourceCond}`;
+    WHERE p.retired = 0 AND p.due < ? ${sourceCond}`;
   const aheadSql = `
     SELECT p.*, s.name AS source_name, s.url AS source_url
     FROM prompts p JOIN sources s ON s.id = p.source_id
-    WHERE p.retired = 0 AND p.due > ? ${sourceCond}
+    WHERE p.retired = 0 AND p.due >= ? ${sourceCond}
     ORDER BY p.due ASC LIMIT ?`;
 
   let rows: Joined[];
@@ -43,15 +45,17 @@ export async function buildSession(
   }
 
   const next = await db.prepare(
-    `SELECT MIN(due) AS next_due FROM prompts WHERE retired = 0 AND due > ?${opts.sourceId ? " AND source_id = ?" : ""}`
+    `SELECT MIN(due) AS next_due FROM prompts WHERE retired = 0 AND due >= ?${opts.sourceId ? " AND source_id = ?" : ""}`
   ).bind(...bindings).first<{ next_due: string | null }>();
 
   let nextDueCount = 0;
   if (next?.next_due) {
+    // everything due on the next due day — a local calendar day, like "due" itself
+    const dayEnd = endOfLocalDay(new Date(next.next_due), opts.tz).toISOString();
     const countSql = `
       SELECT COUNT(*) AS n FROM prompts
-      WHERE retired = 0 AND due > ?1 AND date(due) = date(?2)${opts.sourceId ? " AND source_id = ?3" : ""}`;
-    const countBindings = opts.sourceId ? [nowIso, next.next_due, opts.sourceId] : [nowIso, next.next_due];
+      WHERE retired = 0 AND due >= ?1 AND due < ?2${opts.sourceId ? " AND source_id = ?3" : ""}`;
+    const countBindings = opts.sourceId ? [next.next_due, dayEnd, opts.sourceId] : [next.next_due, dayEnd];
     const count = await db.prepare(countSql).bind(...countBindings).first<{ n: number }>();
     nextDueCount = count?.n ?? 0;
   }

@@ -1,6 +1,6 @@
 import type { Env } from "../env.d";
 import { getSettings, newId, nowIso } from "../db";
-import { localDate } from "../email";
+import { localDate } from "../clock";
 import { page } from "../html";
 
 export function capturePage(): Response {

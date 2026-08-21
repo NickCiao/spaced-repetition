@@ -10,7 +10,8 @@ export async function reviewPage(request: Request, env: Env): Promise<Response> 
   const session = await buildSession(env.DB, {
     ahead: url.searchParams.get("ahead") === "1",
     sourceId: url.searchParams.get("source"),
-    cap: settings.session_cap
+    cap: settings.session_cap,
+    tz: settings.timezone
   }, new Date());
 
   const body = `
