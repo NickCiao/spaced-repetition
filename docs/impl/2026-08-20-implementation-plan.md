@@ -3294,6 +3294,17 @@ git commit -m "Add export zip, dry-run import with diff, and event-replay restor
 
 ---
 
+#### Post-review amendments to Task 13 (authoritative over the code blocks above)
+
+The review + implementer investigation found the exported zip was not the complete system state: retired prompts appeared only as orphaned events, and replayed `retire` events wrongly re-retired prompts that had been un-retired (un-retire writes no event). Amended behavior, reflected in the shipped code:
+
+- `buildExportZip` also writes `retired.jsonl` — one JSON line per retired prompt: `{ id, source_name, kind, question, answer, position }`.
+- `computeImportDiff` loads ALL prompts: an uploaded id matching a retired prompt is an edit + un-retire (not an unknown-id error); active prompts absent from the upload are retired (unchanged); retired prompts absent from the upload simply stay retired.
+- `applyImport` sets `retired = 0` on every prompt present in the upload.
+- `restoreFromZip` recreates archive prompts as `retired = 1`, replays remembered/forgot events for FSRS state on all prompts, and derives the final retired flag from zip provenance (files = active, archive = retired) — never from replayed retire events. On any failure it wipes events/prompts/sources/captures before rethrowing, so a retry is not blocked by the empty-DB gate.
+
+---
+
 ### Task 14: Reminder email cron
 
 **Files:**

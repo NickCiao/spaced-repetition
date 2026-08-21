@@ -92,11 +92,11 @@ When the review log is large enough (~1,000+ events), personal FSRS weights can 
 
 ## 8. Export, import, restore
 
-**Export** (`GET /export.zip`, and the settings-page link): one markdown file per source in the interchange format, an `assets/` folder holding referenced images, `log/reviews.jsonl`, pending captures, and settings. The zip is the complete system state minus secrets.
+**Export** (`GET /export.zip`, and the settings-page link): one markdown file per source in the interchange format, an `assets/` folder holding referenced images, `log/reviews.jsonl`, pending captures, settings, and a `retired.jsonl` archive preserving retired prompts' content (retired prompts stay out of the authoring files, so the files remain the active set). The zip is the complete system state minus secrets.
 
-**Import** (upload endpoint): treats the upload as the desired content state, matched by embedded ID — missing IDs become new prompts, absent prompts are retired, text changes are edits. It is a **dry-run by default**, responding with the full diff ("3 edited, 2 new, 1 would be retired"), and applies only on explicit confirm; a stale or partial zip cannot quietly destroy content. Parse failures reject the whole import with file and line numbers.
+**Import** (upload endpoint): treats the upload as the desired content state, matched by embedded ID — missing IDs become new prompts, absent prompts are retired, text changes are edits, and re-adding a retired prompt's block with its ID un-retires it (scheduling history intact). It is a **dry-run by default**, responding with the full diff ("3 edited, 2 new, 1 would be retired"), and applies only on explicit confirm; a stale or partial zip cannot quietly destroy content. Parse failures reject the whole import with file and line numbers.
 
-**Restore** = deploy a blank worker, upload an export, confirm; assets land back in R2, and review events replay through FSRS (using recorded timestamps) to rebuild all scheduling state.
+**Restore** = deploy a blank worker, upload an export, confirm; assets land back in R2, and review events replay through FSRS (using recorded timestamps) to rebuild all scheduling state. Retired-ness restores from where a prompt sat in the zip (authoring files = active, archive = retired) rather than from replayed events, so un-retiring survives the round-trip.
 
 **The refactor loop** — including future agent-assisted refinement — is export → edit the markdown (human or Claude Code) → import. Two curl one-liners in the README; the interchange format is the whole integration surface.
 
