@@ -130,8 +130,12 @@ type ArchiveLine = {
 // retry on the empty-prompts-table gate below. Order matches the FK-ish dependency
 // (prompts reference sources); each delete is independent so one failing doesn't stop
 // the rest.
+// D1 rows only — R2 objects a failed restore already `put` are deliberately left alone:
+// they're content-addressed, so a later re-put is just an idempotent overwrite, and with
+// no `assets` row pointing at them they're simply unreferenced; the D1 tables are the
+// consistency boundary, not the bucket.
 async function wipeAll(env: Env): Promise<void> {
-  for (const table of ["events", "prompts", "sources", "captures"]) {
+  for (const table of ["events", "prompts", "sources", "captures", "assets"]) {
     try { await env.DB.prepare(`DELETE FROM ${table}`).run(); } catch { /* best-effort */ }
   }
 }

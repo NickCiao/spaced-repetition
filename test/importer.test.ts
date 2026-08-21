@@ -172,4 +172,37 @@ describe("export / import / restore", () => {
     const after = await env.DB.prepare("SELECT retired FROM prompts WHERE id = ?").bind(rid).first();
     expect(after?.retired).toBe(0);
   });
+
+  it("a failed restore wipes inserted rows and unblocks retry", async () => {
+    await env.DB.prepare("DELETE FROM events").run();
+    await env.DB.prepare("DELETE FROM prompts").run();
+    await env.DB.prepare("DELETE FROM sources").run();
+    await env.DB.prepare("DELETE FROM captures").run();
+
+    // Valid prompts/ file: the active-file loop inserts this source + prompt before
+    // restoreFromZip ever looks at retired.jsonl.
+    const validFile = "---\nsource: Wipe Test Src\n---\n\nQ: wipe-q?\nA: wipe-a.\n<!-- id: wwwwwwwwww -->\n";
+    // Malformed retired.jsonl: JSON.parse throws while building the archive list, which
+    // runs after the active-file loop's inserts — so the failure lands mid-restore,
+    // with a source and a prompt already committed, not before any writes happen.
+    const badZip = zipSync({
+      "prompts/wipe-test.md": strToU8(validFile),
+      "retired.jsonl": strToU8("not valid json\n"),
+      "settings.json": strToU8("{}")
+    });
+
+    const res1 = await post("/import?apply=1&restore=1", badZip);
+    expect(res1.status).toBe(400);
+
+    const promptCount = await env.DB.prepare("SELECT COUNT(*) AS n FROM prompts").first();
+    expect(promptCount?.n).toBe(0);
+    const sourceCount = await env.DB.prepare("SELECT COUNT(*) AS n FROM sources").first();
+    expect(sourceCount?.n).toBe(0);
+
+    // Retry with a good zip must succeed — not blocked by a stale non-empty-DB 409.
+    const res2 = await post("/import?apply=1&restore=1", zipSync({ "settings.json": strToU8("{}") }));
+    expect(res2.status).toBe(200);
+    const body = await res2.json() as any;
+    expect(body.restored).toEqual({ sources: 0, prompts: 0, events: 0 });
+  });
 });
