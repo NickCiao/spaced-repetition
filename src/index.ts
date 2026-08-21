@@ -15,6 +15,9 @@ export default {
     if (denied) return denied;
     const url = new URL(request.url);
     if (url.pathname === "/health") return Response.json({ ok: true });
+    // The assets layer serves these before the worker runs in production; serving them here
+    // too keeps the worker self-sufficient and its HTTP surface testable end to end.
+    if (request.method === "GET" && /^\/(sw\.js$|static\/)/.test(url.pathname)) return env.ASSETS.fetch(request);
     if (url.pathname === "/" && request.method === "GET") return reviewPage(request, env);
     if (url.pathname === "/api/grade" && request.method === "POST") return gradeApi(request, env);
     if (url.pathname === "/capture" && request.method === "GET") return capturePage();

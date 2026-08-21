@@ -1,5 +1,5 @@
-import { createExecutionContext, env, fetchMock, waitOnExecutionContext } from "cloudflare:test";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { composeReminder, decideReminder, sessionReady, type CadenceState } from "../src/email";
 import { getSetting, setSetting } from "../src/db";
 import type { SchedFields } from "../src/scheduler";
@@ -188,24 +188,19 @@ describe("decideReminder (pure)", () => {
 });
 
 describe("scheduled handler", () => {
-  beforeAll(() => {
-    fetchMock.activate();
-    fetchMock.disableNetConnect();
+  // The cron's only network call is to Resend; stub fetch and record what was sent.
+  let sent: { url: string; body: string }[] = [];
+  beforeEach(() => {
+    sent = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      sent.push({ url: String(input), body: String(init?.body ?? "") });
+      return Response.json({ id: "email_1" });
+    });
   });
-  afterEach(() => fetchMock.assertNoPendingInterceptors());
+  afterEach(() => vi.unstubAllGlobals());
 
-  // Storage is shared across files (see vitest.config.ts), so the cron's view of "what's
-  // due" must be made deterministic: retire everything else for the duration of a test.
-  async function quiesce(): Promise<() => Promise<void>> {
-    const ids = (await env.DB.prepare("SELECT id FROM prompts WHERE retired = 0").all<{ id: string }>())
-      .results.map(r => r.id);
-    await env.DB.prepare("UPDATE prompts SET retired = 1 WHERE retired = 0").run();
-    return async () => {
-      const stmt = env.DB.prepare("UPDATE prompts SET retired = 0 WHERE id = ?");
-      if (ids.length) await env.DB.batch(ids.map(id => stmt.bind(id)));
-    };
-  }
-
+  // Storage is isolated per test file, so this file's cron tests see only what they seed
+  // (and unseed, so the two cases don't see each other).
   async function seed(sourceId: string, prompts: { id: string; f: SchedFields }[], now: string) {
     await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Cron', NULL, '{}', ?)")
       .bind(sourceId, now).run();
@@ -242,11 +237,9 @@ describe("scheduled handler", () => {
   }
 
   it("sends one Resend email, counting only what is due, when a session is ready at the configured hour", async () => {
-    let restore: (() => Promise<void>) | null = null;
     const now = "2026-08-21T09:05:00Z";
     const t = at(now);
     try {
-      restore = await quiesce();
       await pinSettings("UTC", "9");
       await seed("cronsrc001", [
         // one prompt that has waited more than a week, plus three that aren't due until day 3
@@ -255,27 +248,23 @@ describe("scheduled handler", () => {
         { id: "cronpmt003", f: learned(days(3, t), 100, days(-10, t)) },
         { id: "cronpmt004", f: learned(days(3, t), 100, days(-10, t)) }
       ], now);
-      fetchMock.get("https://api.resend.com")
-        .intercept({ path: "/emails", method: "POST", body: (b: string) => b.includes("Reminder: 1 prompt due") })
-        .reply(200, { id: "email_1" });
       await runCron(now);
-      // assertNoPendingInterceptors in afterEach proves the send happened exactly once
+      expect(sent).toHaveLength(1);
+      expect(sent[0].url).toBe("https://api.resend.com/emails");
+      expect(sent[0].body).toContain("Reminder: 1 prompt due");
       const cadence = JSON.parse((await getSetting(env.DB, "cadence"))!) as CadenceState;
       expect(cadence.unanswered).toBe(1);
       expect(cadence.last_sent).toBe(t.toISOString());
     } finally {
-      if (restore) await restore();
       await unseed("cronsrc001");
       await pinSettings("America/Los_Angeles", "7");
     }
   });
 
   it("does not send when the due prompts can wait for a fuller session", async () => {
-    let restore: (() => Promise<void>) | null = null;
     const now = "2026-08-21T09:05:00Z";
     const t = at(now);
     try {
-      restore = await quiesce();
       await pinSettings("UTC", "9");
       const solid = (due: Date) => learned(due, 100, days(-10, t));
       await seed("cronsrc002", [
@@ -284,11 +273,11 @@ describe("scheduled handler", () => {
         { id: "cronpmt103", f: solid(days(2, t)) },
         { id: "cronpmt104", f: solid(days(2, t)) }
       ], now);
-      await runCron(now); // no interceptor registered: any send would throw
+      await runCron(now);
+      expect(sent).toHaveLength(0);
       const cadence = JSON.parse((await getSetting(env.DB, "cadence"))!) as CadenceState;
       expect(cadence.last_sent).toBeNull();
     } finally {
-      if (restore) await restore();
       await unseed("cronsrc002");
       await pinSettings("America/Los_Angeles", "7");
     }
