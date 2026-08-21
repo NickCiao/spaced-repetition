@@ -12,7 +12,7 @@ I tried both [Mochi](https://mochi.cards/) & [Anki](https://apps.ankiweb.net/) (
 
 I've also looked at [Orbit](https://github.com/andymatuschak/orbit) (I'm a big fan of AndyM's work), but it's primarily targeting writers, giving them a tool to create content in the style of [Quantum Country](https://quantum.country/).  With that being said, Orbit does introduce two really useful abstractions: a Task (e.g. a thing that you want to remember), and a Scheduler (which decides when each Task is due for review, and when to notify you).
 
-At a high level, this project consists of a few companion pieces of software that helps make memory augmentation an ambient layer over whatever it is that you're reading or thinking about. This is software that assists you in capturing ideas in-context with minimal interruption, help turn those raw captures into good memory retrieval prompts, and then intelligently resurface them for review at the right time to maximize long-term retention while minimizing practice time.
+At a high level, this project consists of a few companion pieces of software that make memory augmentation an ambient layer over whatever you’re reading or thinking about. The software helps you capture ideas worth remembering from their source context with minimal interruption, refine those raw captures into effective retrieval prompts, and intelligently resurface them for review at the right time (maximizing long-term retention while minimizing practice time).
 
 ## Deploy (once)
 
