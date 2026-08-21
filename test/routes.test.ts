@@ -157,3 +157,65 @@ describe("capture", () => {
     expect(sw.headers.get("Content-Type") ?? "").toContain("javascript");
   });
 });
+
+describe("inbox and refine", () => {
+  async function seedCapture(text = "cap-text") {
+    const res = await POST("/api/capture", { text, url: "https://src.example/x", title: "Cap Title" });
+    return (await res.json() as { id: string }).id;
+  }
+
+  it("inbox lists pending captures and flagged prompts", async () => {
+    const cid = await seedCapture("inbox-cap");
+    const pid = await seedReviewPrompt("flagged-question");
+    await POST("/api/grade", { prompt_id: pid, action: "flag", note: "unclear" });
+    const html = await (await SELF.fetch("http://sr/inbox", AUTH)).text();
+    expect(html).toContain("inbox-cap");
+    expect(html).toContain(`/refine/${cid}`);
+    expect(html).toContain("flagged-question");
+    expect(html).toContain("unclear");
+  });
+
+  it("refine creates prompts as new cards and consumes the capture", async () => {
+    const cid = await seedCapture();
+    const res = await POST("/api/refine", {
+      capture_id: cid,
+      source: { name: "Refine Book", url: "https://src.example/x" },
+      prompts: [
+        { kind: "qa", question: "RQ1?", answer: "RA1" },
+        { kind: "cloze", question: "The {{answer}} is here.", answer: "" }
+      ]
+    });
+    expect(res.status).toBe(200);
+    const { prompt_ids } = await res.json() as { prompt_ids: string[] };
+    expect(prompt_ids.length).toBe(2);
+    const p = await env.DB.prepare("SELECT * FROM prompts WHERE id = ?").bind(prompt_ids[0]).first();
+    expect(p?.reps).toBe(0);
+    expect(p?.state).toBe(0);
+    const cap = await env.DB.prepare("SELECT status FROM captures WHERE id = ?").bind(cid).first();
+    expect(cap?.status).toBe("consumed");
+    const again = await POST("/api/refine", { capture_id: cid, source: { name: "X" }, prompts: [{ kind: "qa", question: "q", answer: "a" }] });
+    expect(again.status).toBe(409);
+  });
+
+  it("refine validation: no prompts, cloze without spans, qa without answer", async () => {
+    const cid = await seedCapture();
+    expect((await POST("/api/refine", { capture_id: cid, source: { name: "S" }, prompts: [] })).status).toBe(400);
+    expect((await POST("/api/refine", { capture_id: cid, source: { name: "S" }, prompts: [{ kind: "cloze", question: "no spans", answer: "" }] })).status).toBe(400);
+    expect((await POST("/api/refine", { capture_id: cid, source: { name: "S" }, prompts: [{ kind: "qa", question: "q?", answer: "" }] })).status).toBe(400);
+  });
+
+  it("capture delete removes pending capture", async () => {
+    const cid = await seedCapture("to-delete");
+    const res = await SELF.fetch(`http://sr/api/capture/${cid}/delete`, { method: "POST", ...AUTH });
+    expect(res.status).toBe(200);
+    const row = await env.DB.prepare("SELECT id FROM captures WHERE id = ?").bind(cid).first();
+    expect(row).toBeNull();
+  });
+
+  it("preview renders both sides", async () => {
+    const res = await POST("/api/preview", { kind: "cloze", question: "Hide {{this}}.", answer: "" });
+    const body = await res.json() as { questionHtml: string; answerHtml: string };
+    expect(body.questionHtml).toContain("[…]");
+    expect(body.answerHtml).toContain("this");
+  });
+});
