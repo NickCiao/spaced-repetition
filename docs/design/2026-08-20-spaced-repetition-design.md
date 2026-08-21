@@ -16,7 +16,7 @@ The tool serves four loops, in decreasing frequency:
 
 | Loop | When | Where | Duration |
 |---|---|---|---|
-| **Review** | ~daily, from an email nudge | phone or Mac | ~2 min |
+| **Review** | ~daily from an email nudge — or on demand, ahead of schedule | phone or Mac | ~2 min |
 | **Capture** | mid-reading, the moment something matters | share sheet or PWA | seconds |
 | **Refine** | every few days, clearing the inbox | any device | minutes |
 | **Refactor** | occasionally | Mac, files + editor or agent | as needed |
@@ -58,6 +58,7 @@ The `spaced-repetition` repo contains only the tool — code and docs, no person
 | Sources | Free-text name + optional URL | Books, papers, PDFs, podcasts, and chat conversations are all just descriptions; a URL adds a link when one exists. Unknown frontmatter fields pass through untouched. |
 | Reminders | Daily email; decays to weekly when ignored | The proven Quantum Country pattern: a tiny framed commitment ("6 prompts · ~2 min") with a deep link. After 4 consecutive un-actioned daily reminders, cadence drops to weekly until the next review, then resumes. The reminder respects attention rather than fighting for it. |
 | Backup | Manual export only, plus D1 Time Travel (30-day PITR) | Deliberate simplicity: no mirror repos, no snapshot automation, no tokens to rotate. Accepted risk, recorded in §9: changes since the last manual export are exposed to catastrophic vendor/account loss. |
+| Ahead-of-schedule review | Allowed anywhere; every review is recorded and fed to FSRS — there is no separate practice mode | FSRS assumes it observes all retrievals, and it handles early ones natively: success while recall is still likely yields only a small stability bump (drilling can't inflate the schedule), while failing early is exactly the signal that card needed. Unrecorded practice would make the scheduler's model diverge from actual memory. |
 | Metrics | None | No streaks, no stats, no counters. The only numbers ever shown are what's due now and when the next review lands. |
 
 ## 5. Content model
@@ -75,17 +76,17 @@ Field-by-field shapes live in code; the entities and their meaning:
 
 FSRS via `ts-fsrs` with default weights, desired retention 0.9, fuzz enabled. New prompts surface about three days after creation (the default-weight consequence, not a configured value). Late reviews are handled natively: retrievability is computed from actual elapsed time, so remembering something long overdue yields a larger stability gain — a backlog self-resolves upward rather than punishing the lapse.
 
-A session is simply what's due — ordered weakest predicted recall first, capped at the session cap. The cap bounds a sitting, not the backlog: the end screen offers "N more due — keep going?" and nothing expires. Because sessions are just queries over D1 state, they are device-interchangeable mid-session by construction: three cards graded on the phone leave the remaining three waiting at the Mac, with nothing to hand off.
+A session is simply what's due — ordered weakest predicted recall first, capped at the session cap. The cap bounds a sitting, not the backlog: the end screen offers "N more due — keep going?" and nothing expires. Sessions can also run ahead of schedule: when nothing (or nothing more) is due, a session may continue into not-yet-due cards, soonest-due first, and Browse can start a session scoped to a single source. These are ordinary FSRS reviews at their actual elapsed times — see the ahead-of-schedule decision in §4. Because sessions are just queries over D1 state, they are device-interchangeable mid-session by construction: three cards graded on the phone leave the remaining three waiting at the Mac, with nothing to hand off.
 
 When the review log is large enough (~1,000+ events), personal FSRS weights can be fitted offline from an export and swapped in. Out of scope for v1; the data model makes it a config change, not a migration.
 
 ## 7. Surfaces
 
-- **Review** — one card at a time: question → reveal (tap, or Space) → answer with source line → **Forgot / Remembered** (thumb buttons; ← / → on desktop). Cloze cards show the text with spans masked as […] and reveal in place with the deletions highlighted; both sides render full markdown — code, images, math. Per-card overflow: Skip (no schedule change), Flag (with a note; lands in the inbox), Retire, Edit (opens the prompt editor in place). When nothing is due: "Nothing due. Next: Thursday (4 prompts)."
+- **Review** — one card at a time: question → reveal (tap, or Space) → answer with source line → **Forgot / Remembered** (thumb buttons; ← / → on desktop). Cloze cards show the text with spans masked as […] and reveal in place with the deletions highlighted; both sides render full markdown — code, images, math. Per-card overflow: Skip (no schedule change), Flag (with a note; lands in the inbox), Retire, Edit (opens the prompt editor in place). When nothing is due: "Nothing due. Next: Thursday (4 prompts)" — with a quiet **Review ahead** option that continues into the soonest-due cards; the end-of-session screen offers the same after the backlog prompt.
 - **Capture** — a text box, an optional photo (a diagram from a paper book; downscaled client-side before upload), an optional source field that autocompletes from existing sources (a book captured against repeatedly costs one typing of its name), Save, "Saved ✓", today's captures listed beneath. Installable to the phone home screen; the shell is cached, and offline saves queue in localStorage and flush on reconnection. This is the path that works in airplane mode.
 - **Share-sheet Shortcut (iOS)** — select text in Safari / a PDF / Kindle → Share → Capture: POSTs the selection plus page title and URL, after asking for an optional one-line annotation (one tap skips). Online-only by nature; it fails loudly without signal, and the PWA is the offline fallback. Setup (~5 steps, token pasted once) documented in the README — no app to build.
 - **Inbox** — pending captures and flagged prompts in one list; the only to-do surface. Tapping a capture opens the refine editor: write one or several prompts (Q/A or cloze), paste or attach images, with a preview toggle so math and cloze masking are visible before saving; source pre-filled from the capture's URL/title where possible; saving consumes the capture. Empty inbox = caught up. Nothing nags about inbox age.
-- **Browse** — prompts grouped by source; edit, retire, or add a prompt directly (authoring does not require a capture).
+- **Browse** — prompts grouped by source; edit, retire, or add a prompt directly (authoring does not require a capture); start a session scoped to one source ("Review this source now" — a deliberate refresh before a discussion, or a first pass over prompts just written).
 - **Settings** — the four settings, a "Download everything" export link, and the import upload.
 - **Email** — one daily cron at the configured hour: if anything is due, one message — "6 prompts due · ~2 min" (time estimated at ~20s/card) — deep-linking into the session. Nothing due, no email. Cadence decay per §4.
 
@@ -114,10 +115,6 @@ When the review log is large enough (~1,000+ events), personal FSRS weights can 
 
 TDD throughout. The highest-risk logic is pure and tested first: golden tests for the FSRS wrapper (fixed review sequences → expected states), property tests for the interchange format (parse ∘ render round-trips, cloze spans included), unit tests for the import differ (new / edited / retired) and the reminder cadence rules. Worker handlers get integration tests against a local D1 via vitest and wrangler's test pool.
 
-## 11. Out of scope for v1
+## 11. Future directions
 
-Agent-drafted prompts (the export/import loop already supports the workflow; no software needed yet) · typed answers · stats or gamification of any kind · multi-user · FSRS weight fitting · voice capture (same endpoint, whenever wanted) · automated backup.
-
-## 12. Future directions
-
-Three extensions the design leaves room for, none of which require rework: **agent-assisted refinement** (Claude drafts prompts from captures via the refactor loop; Nick curates); **personal FSRS weights** fitted from the review log; and **progressive memory prompts** — prompts whose content changes over time in a programmed, author-defined sequence, e.g. deepening from recognition toward application and connection as recall succeeds. Prompt identity plus the append-only event log already give each card the history needed to drive stage advancement, so this is a format extension (a staged prompt variant in the interchange files), not a rework.
+Four extensions the design leaves room for: **agent-assisted refinement** (Agent drafts prompts from captures via the refactor loop; Nick curates); **agent-assisted capture** — given the entire source material (an article, a paper, a book chapter), an agent proposes candidate prompts for the whole piece, which enter the same inbox for curation rather than becoming prompts directly, so control over what's worth remembering — and the encoding value of engaging with each prompt — stays with Nick; **personal FSRS weights** fitted from the review log; and **progressive memory prompts** — prompts whose content changes over time in a programmed, author-defined sequence, e.g. deepening from recognition toward application and connection as recall succeeds. Prompt identity plus the append-only event log already give each card the history needed to drive stage advancement, so this is a format extension (a staged prompt variant in the interchange files), not a rework.
