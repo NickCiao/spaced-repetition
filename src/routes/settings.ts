@@ -1,6 +1,6 @@
 import type { Env } from "../env.d";
 import { getSettings, setSetting } from "../db";
-import { page } from "../html";
+import { escapeHtml, page } from "../html";
 
 export async function settingsPage(env: Env): Promise<Response> {
   const s = await getSettings(env.DB);
@@ -11,7 +11,7 @@ export async function settingsPage(env: Env): Promise<Response> {
   <label>Session cap</label><input type="text" id="session_cap" value="${s.session_cap}">
   <label>Desired retention (0.7–0.97)</label><input type="text" id="desired_retention" value="${s.desired_retention}">
   <label>Reminder hour (0–23, local)</label><input type="text" id="email_hour" value="${s.email_hour}">
-  <label>Timezone</label><input type="text" id="timezone" value="${s.timezone}">
+  <label>Timezone</label><input type="text" id="timezone" value="${escapeHtml(s.timezone)}">
   <div class="btnrow"><button class="primary">Save</button></div>
   <p class="flash" id="flash"></p>
 </form>
@@ -60,6 +60,8 @@ export async function settingsApi(request: Request, env: Env): Promise<Response>
     return Response.json({ error: "desired_retention must be 0.7–0.97" }, { status: 400 });
   if (!Number.isInteger(b.email_hour) || b.email_hour! < 0 || b.email_hour! > 23)
     return Response.json({ error: "email_hour must be 0–23" }, { status: 400 });
+  if (typeof b.timezone !== "string" || !b.timezone.trim())
+    return Response.json({ error: "timezone required" }, { status: 400 }); // undefined never throws in Intl
   try { new Intl.DateTimeFormat("en-US", { timeZone: b.timezone }); }
   catch { return Response.json({ error: "unknown timezone" }, { status: 400 }); }
 

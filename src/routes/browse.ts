@@ -29,7 +29,7 @@ export async function browseSource(sourceId: string, env: Env): Promise<Response
     </div>`).join("") || "<p class='source'>No prompts.</p>";
   const body = `${NAV}
 <h1>${escapeHtml(src.name)}</h1>
-${src.url ? `<p class="source"><a href="${escapeHtml(src.url)}">${escapeHtml(src.url)}</a></p>` : ""}
+${src.url && /^https?:\/\//i.test(src.url) ? `<p class="source"><a href="${escapeHtml(src.url)}">${escapeHtml(src.url)}</a></p>` : ""}
 <div class="btnrow">
   <a class="btn" href="/?source=${src.id}">Review this source now</a>
   <a class="btn" href="/?source=${src.id}&ahead=1">Review ahead</a>
@@ -46,13 +46,18 @@ export async function promptForm(idOrNew: string, request: Request, env: Env): P
     p = await env.DB.prepare("SELECT * FROM prompts WHERE id = ?").bind(idOrNew).first<PromptRow>();
     if (!p) return new Response("not found", { status: 404 });
     sourceId = p.source_id;
+  } else {
+    // Query param is attacker-reachable: require a well-formed id naming a real source.
+    if (!/^[a-z0-9]{10}$/.test(sourceId)) return new Response("not found", { status: 404 });
+    const src = await env.DB.prepare("SELECT id FROM sources WHERE id = ?").bind(sourceId).first();
+    if (!src) return new Response("not found", { status: 404 });
   }
   const body = `${NAV}
 <h1>${p ? "Edit prompt" : "New prompt"}</h1>
 ${p?.flag_note ? `<p class="source">flag: ${escapeHtml(p.flag_note)}</p>` : ""}
 <form method="post" action="/api/prompt" onsubmit="return submitPrompt(event)">
-  <input type="hidden" id="pid" value="${p?.id ?? ""}">
-  <input type="hidden" id="sid" value="${sourceId}">
+  <input type="hidden" id="pid" value="${escapeHtml(p?.id ?? "")}">
+  <input type="hidden" id="sid" value="${escapeHtml(sourceId)}">
   <label>Kind</label>
   <select id="kind"><option value="qa"${p?.kind !== "cloze" ? " selected" : ""}>Q / A</option>
   <option value="cloze"${p?.kind === "cloze" ? " selected" : ""}>Cloze</option></select>

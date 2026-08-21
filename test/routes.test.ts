@@ -273,4 +273,24 @@ describe("browse, prompt edit, settings", () => {
     // restore defaults for other tests
     await POST("/api/settings", { session_cap: 20, desired_retention: 0.9, email_hour: 7, timezone: "America/Los_Angeles" });
   });
+
+  it("prompt/new rejects malformed or unknown source ids", async () => {
+    const evil = await SELF.fetch(`http://sr/prompt/new?source=${encodeURIComponent('x"><script>1</script>')}`, AUTH);
+    expect(evil.status).toBe(404);
+    const unknown = await SELF.fetch("http://sr/prompt/new?source=zzzzzzzzzz", AUTH);
+    expect(unknown.status).toBe(404);
+  });
+
+  it("javascript: source urls never render as links", async () => {
+    const sid = newId();
+    await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Sketchy', 'javascript:alert(1)', '{}', ?)")
+      .bind(sid, nowIso()).run();
+    const html = await (await SELF.fetch(`http://sr/browse/${sid}`, AUTH)).text();
+    expect(html).not.toContain('href="javascript:');
+  });
+
+  it("omitted timezone is a 400, not a crash", async () => {
+    const res = await POST("/api/settings", { session_cap: 20, desired_retention: 0.9, email_hour: 7 });
+    expect(res.status).toBe(400);
+  });
 });
