@@ -7,6 +7,7 @@ import { deleteCapture, inboxPage, previewApi, refineApi, refinePage } from "./r
 import { browseIndex, browseSource, promptApi, promptForm } from "./routes/browse";
 import { settingsApi, settingsPage } from "./routes/settings";
 import { exportZip, importZip } from "./routes/transfer";
+import { runReminderCron } from "./email";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -44,6 +45,6 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    // wired in Task 14
+    ctx.waitUntil(runReminderCron(env, new Date(controller.scheduledTime)));
   }
 } satisfies ExportedHandler<Env>;
