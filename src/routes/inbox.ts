@@ -15,6 +15,7 @@ export async function inboxPage(env: Env): Promise<Response> {
   const capHtml = caps.map(c => `
     <div class="item">
       <div>${escapeHtml(c.text)}</div>
+      ${c.note ? `<div class="source">note: ${escapeHtml(c.note)}</div>` : ""}
       ${c.image_id && /^[0-9a-f]{32}$/.test(c.image_id) ? `<img src="/assets/${c.image_id}" style="max-height:120px">` : ""}
       <div class="source">${escapeHtml(c.title ?? c.url ?? "")} · ${c.created_at.slice(0, 10)}</div>
       <div class="overflow"><a href="/refine/${c.id}">Refine</a>
@@ -45,6 +46,7 @@ export async function refinePage(captureId: string, env: Env): Promise<Response>
 <nav><a href="/">Review</a> <a href="/capture">Capture</a> <a href="/inbox">Inbox</a> <a href="/browse">Browse</a> <a href="/settings">Settings</a></nav>
 <h1>Refine</h1>
 <div class="card"><div>${escapeHtml(cap.text)}</div>
+${cap.note ? `<div class="source">note: ${escapeHtml(cap.note)}</div>` : ""}
 ${cap.image_id && /^[0-9a-f]{32}$/.test(cap.image_id) ? `<img src="/assets/${cap.image_id}">` : ""}
 <div class="source">${escapeHtml(cap.title ?? "")} ${cap.url && /^https?:\/\//i.test(cap.url) ? `· <a href="${escapeHtml(cap.url)}">${escapeHtml(cap.url)}</a>` : ""}</div></div>
 <div id="refine"
@@ -112,7 +114,8 @@ export async function refineApi(request: Request, env: Env): Promise<Response> {
         `INSERT INTO prompts (id, source_id, kind, question, answer, position, created_at, updated_at,
           due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(id, sourceId, p.kind, p.question, p.kind === "cloze" ? "" : (p.answer ?? ""), pos++, ts, ts,
+      ).bind(id, sourceId, p.kind, p.question.replace(/\s+$/, ""),
+             p.kind === "cloze" ? "" : (p.answer ?? "").replace(/\s+$/, ""), pos++, ts, ts,
              f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
              f.reps, f.lapses, f.state, f.last_review);
     });

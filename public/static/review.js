@@ -7,20 +7,24 @@
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+  // nextDueCount is only meaningful alongside a real nextDue date; when nextDue is
+  // null the count is always 0, so the suffix naturally disappears too.
+  const dueSuffix = () => session.nextDueCount ? ` (${session.nextDueCount} prompts)` : "";
+
   function finish() {
     let html = '<div class="done">';
     if (session.dueRemaining > 0) {
       html += `<p>${session.dueRemaining} more due — keep going?</p><p><a class="btn" href="/">Continue</a></p>`;
     } else {
       const next = session.nextDue ? new Date(session.nextDue).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }) : "—";
-      html += `<p>Done — next review ${next}.</p><p><a class="btn" href="/?ahead=1">Review ahead</a></p>`;
+      html += `<p>Done — next review ${next}${dueSuffix()}.</p><p><a class="btn" href="/?ahead=1">Review ahead</a></p>`;
     }
     el.innerHTML = html + "</div>";
   }
 
   function nothingDue() {
     const next = session.nextDue ? new Date(session.nextDue).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }) : "nothing scheduled";
-    el.innerHTML = `<div class="done"><p>Nothing due. Next: ${next}.</p>
+    el.innerHTML = `<div class="done"><p>Nothing due. Next: ${next}${dueSuffix()}.</p>
       <p><a class="btn" href="/?ahead=1">Review ahead</a></p></div>`;
   }
 

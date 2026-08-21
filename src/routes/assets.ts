@@ -3,9 +3,14 @@ import { nowIso } from "../db";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
+// image/svg+xml is deliberately excluded: an SVG can embed <script>, and served
+// same-origin it would execute with access to this app's session — the raster
+// formats below carry no such risk.
+export const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"]);
+
 export async function uploadAsset(request: Request, env: Env): Promise<Response> {
   const type = request.headers.get("Content-Type") ?? "";
-  if (!type.startsWith("image/")) return Response.json({ error: "image/* only" }, { status: 400 });
+  if (!ALLOWED_TYPES.has(type)) return Response.json({ error: "unsupported image type" }, { status: 400 });
   const buf = await request.arrayBuffer();
   if (buf.byteLength === 0) return Response.json({ error: "empty" }, { status: 400 });
   if (buf.byteLength > MAX_BYTES) return Response.json({ error: "too large" }, { status: 413 });
@@ -33,7 +38,9 @@ export async function serveAsset(id: string, env: Env): Promise<Response> {
   return new Response(obj.body, {
     headers: {
       "Content-Type": row.content_type,
-      "Cache-Control": "private, max-age=31536000, immutable"
+      "Cache-Control": "private, max-age=31536000, immutable",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "sandbox"
     }
   });
 }

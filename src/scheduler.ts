@@ -46,7 +46,7 @@ export function applyGrade(
   fields: SchedFields, grade: Grade, now: Date, desiredRetention: number
 ): SchedFields {
   // enable_fuzz: false — determinism is required for replay/restore (§8 of the spec).
-  // Load-spreading fuzz was a nice-to-have; determinism wins. Note this in the task commit.
+  // Load-spreading fuzz was a nice-to-have; determinism wins.
   //
   // enable_short_term: false — installed ts-fsrs (5.4.1) defaults to short-term
   // learning steps enabled, which requires a `learning_steps` field on Card and

@@ -71,6 +71,11 @@ describe("interchange format", () => {
   it("render refuses unrepresentable text", () => {
     expect(() => renderSourceFile(src, [{ id: "cccccccccc", kind: "qa", question: "ok?", answer: "A: looks like a marker" }]))
       .toThrow(FormatError);
+    // Bare markers (marker + end-of-line, no trailing space) used to slip past the guard.
+    expect(() => renderSourceFile(src, [{ id: "cccccccccc", kind: "qa", question: "ok?", answer: "line one\nC:\nline three" }]))
+      .toThrow(FormatError);
+    expect(() => renderSourceFile(src, [{ id: "cccccccccc", kind: "qa", question: "ok?", answer: "A:" }]))
+      .toThrow(FormatError);
   });
 
   it("render refuses ids, meta, cloze answers, and names that cannot round-trip", () => {
@@ -80,6 +85,8 @@ describe("interchange format", () => {
     expect(() => renderSourceFile({ name: "S", url: null, meta: "{not json" }, [])).toThrow(FormatError);
     expect(() => renderSourceFile({ name: "", url: null, meta: "{}" }, [])).toThrow(FormatError);
     expect(() => renderSourceFile(src, [{ id: "cccccccccc", kind: "cloze", question: "Hide {{x}}.", answer: "stray" }])).toThrow(FormatError);
+    expect(() => renderSourceFile({ name: "a\nb", url: null, meta: "{}" }, [])).toThrow(FormatError);
+    expect(() => renderSourceFile({ name: "S", url: "https://x\nevil: y", meta: "{}" }, [])).toThrow(FormatError);
   });
 
   it("parses CRLF input identically to LF", () => {

@@ -6,7 +6,9 @@ export type SessionCard = {
   id: string; kind: "qa" | "cloze"; questionHtml: string; answerHtml: string;
   sourceName: string; sourceUrl: string | null;
 };
-export type Session = { cards: SessionCard[]; dueRemaining: number; nextDue: string | null; ahead: boolean };
+export type Session = {
+  cards: SessionCard[]; dueRemaining: number; nextDue: string | null; nextDueCount: number; ahead: boolean;
+};
 
 type Joined = PromptRow & { source_name: string; source_url: string | null };
 
@@ -44,10 +46,21 @@ export async function buildSession(
     `SELECT MIN(due) AS next_due FROM prompts WHERE retired = 0 AND due > ?${opts.sourceId ? " AND source_id = ?" : ""}`
   ).bind(...bindings).first<{ next_due: string | null }>();
 
+  let nextDueCount = 0;
+  if (next?.next_due) {
+    const countSql = `
+      SELECT COUNT(*) AS n FROM prompts
+      WHERE retired = 0 AND due > ?1 AND date(due) = date(?2)${opts.sourceId ? " AND source_id = ?3" : ""}`;
+    const countBindings = opts.sourceId ? [nowIso, next.next_due, opts.sourceId] : [nowIso, next.next_due];
+    const count = await db.prepare(countSql).bind(...countBindings).first<{ n: number }>();
+    nextDueCount = count?.n ?? 0;
+  }
+
   return {
     ahead: opts.ahead,
     dueRemaining,
     nextDue: next?.next_due ?? null,
+    nextDueCount,
     cards: rows.map(r => ({
       id: r.id,
       kind: r.kind,

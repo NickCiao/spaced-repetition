@@ -3,6 +3,7 @@ import type { Env } from "./env.d";
 import { newId, type PromptRow, type SourceRow } from "./db";
 import { FormatError, parseSourceFile, type ParsedFile, type ParsedPrompt } from "./format";
 import { applyGrade, newCardFields } from "./scheduler";
+import { ALLOWED_TYPES } from "./routes/assets";
 
 export class RestoreNotEmptyError extends Error {}
 
@@ -246,9 +247,9 @@ export async function restoreFromZip(
         if (kv) fields[kv[1]] = kv[2];
       }
       await env.DB.prepare(
-        "INSERT INTO captures (id, created_at, text, url, title, note, image_id) VALUES (?, ?, ?, ?, ?, NULL, ?)"
+        "INSERT INTO captures (id, created_at, text, url, title, note, image_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
       ).bind(m[1], fields["captured"] ?? now.toISOString(), (fm ? fm[2] : text).trim(),
-             fields["url"] ?? null, fields["title"] ?? null, fields["image"] ?? null).run();
+             fields["url"] ?? null, fields["title"] ?? null, fields["note"] ?? null, fields["image"] ?? null).run();
     }
 
     const index = files["assets/index.json"]
@@ -256,6 +257,7 @@ export async function restoreFromZip(
     for (const [id, contentType] of Object.entries(index)) {
       const bytes = files[`assets/${id}`];
       if (!bytes) continue;
+      if (!ALLOWED_TYPES.has(contentType)) throw new Error(`asset ${id}: unsupported content type`);
       await env.BUCKET.put(id, bytes, { httpMetadata: { contentType } });
       await env.DB.prepare(
         "INSERT OR IGNORE INTO assets (id, content_type, bytes, created_at) VALUES (?, ?, ?, ?)"

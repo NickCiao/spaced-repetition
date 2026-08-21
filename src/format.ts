@@ -7,7 +7,7 @@ export class FormatError extends Error {
   }
 }
 
-const MARKER = /^(Q: |A: |C: |<!-- id:)|^---$/;
+const MARKER = /^(?:(?:Q:|A:|C:)(?: |$)|<!-- id:|---$)/;
 
 function checkRepresentable(path: string, text: string, kind: string): void {
   const lines = text.split("\n");
@@ -25,6 +25,8 @@ export function renderSourceFile(
   // Render refuses anything that cannot round-trip exactly — silent drift on
   // re-import would be data corruption (import treats files as desired state).
   if (!source.name?.trim()) throw new FormatError("(render)", 1, "source name required");
+  if (/[\r\n]/.test(source.name)) throw new FormatError("(render)", 1, "source name must be single-line");
+  if (source.url != null && /[\r\n]/.test(source.url)) throw new FormatError("(render)", 1, "source url must be single-line");
   let meta: Record<string, unknown>;
   try { meta = JSON.parse(source.meta || "{}") as Record<string, unknown>; }
   catch { throw new FormatError("(render)", 1, "source meta is not valid JSON"); }

@@ -1,5 +1,6 @@
 import type { Env } from "../env.d";
-import { newId, nowIso } from "../db";
+import { getSettings, newId, nowIso } from "../db";
+import { localDate } from "../email";
 import { page } from "../html";
 
 export function capturePage(): Response {
@@ -38,11 +39,18 @@ export async function captureApi(request: Request, env: Env): Promise<Response> 
 }
 
 export async function capturesToday(env: Env): Promise<Response> {
-  const dayStart = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const settings = await getSettings(env.DB);
+  // Widen the SQL filter to the last 48h (cheap, timezone-agnostic index scan), then
+  // narrow to "today" in the user's own timezone in JS — a UTC day boundary would
+  // misclassify captures made near midnight local time.
+  const cutoff = new Date(now.getTime() - 48 * 3600_000).toISOString();
   const rows = await env.DB.prepare(
     "SELECT id, text, created_at FROM captures WHERE status='pending' AND created_at >= ? ORDER BY created_at DESC"
-  ).bind(dayStart).all();
-  return Response.json({ items: rows.results });
+  ).bind(cutoff).all<{ id: string; text: string; created_at: string }>();
+  const today = localDate(now, settings.timezone);
+  const items = rows.results.filter(r => localDate(new Date(r.created_at), settings.timezone) === today);
+  return Response.json({ items });
 }
 
 export async function sourcesApi(request: Request, env: Env): Promise<Response> {

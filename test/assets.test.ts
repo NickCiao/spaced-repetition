@@ -31,10 +31,22 @@ describe("assets", () => {
       method: "POST", headers: { ...AUTH, "Content-Type": "text/plain" }, body: "hi"
     });
     expect(bad.status).toBe(400);
+    // Scripted SVG executes same-origin — excluded even though it's technically an image type.
+    const svg = await SELF.fetch("http://sr/api/assets", {
+      method: "POST", headers: { ...AUTH, "Content-Type": "image/svg+xml" }, body: "<svg></svg>"
+    });
+    expect(svg.status).toBe(400);
     const big = await SELF.fetch("http://sr/api/assets", {
       method: "POST", headers: { ...AUTH, "Content-Type": "image/jpeg" },
       body: new Uint8Array(5 * 1024 * 1024 + 1)
     });
     expect(big.status).toBe(413);
+
+    const up = await SELF.fetch("http://sr/api/assets", {
+      method: "POST", headers: { ...AUTH, "Content-Type": "image/png" }, body: bytes
+    });
+    const { id } = await up.json() as { id: string };
+    const served = await SELF.fetch(`http://sr/assets/${id}`, { headers: AUTH });
+    expect(served.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 });

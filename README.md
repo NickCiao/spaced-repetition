@@ -13,6 +13,8 @@ npx wrangler d1 migrations apply sr --remote
 openssl rand -hex 32 | npx wrangler secret put SR_TOKEN
 npx wrangler secret put RESEND_API_KEY   # from resend.com (free tier)
 # edit wrangler.jsonc vars: BASE_URL (your workers.dev URL), EMAIL_TO, EMAIL_FROM
+#   EMAIL_FROM must be a verified domain sender, or onboarding@resend.dev — Resend's
+#   shared domain only permits sending from that one address.
 npx wrangler deploy
 ```
 

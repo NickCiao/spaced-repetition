@@ -37,6 +37,7 @@ describe("buildSession", () => {
     expect(s.cards[0].id).toBe(weak);
     expect(s.cards[1].id).toBe(strong);
     expect(s.nextDue).not.toBeNull();
+    expect(s.nextDueCount).toBeGreaterThanOrEqual(1); // the "future" prompt seeded above
     expect(s.cards[0].sourceName).toBe("Sess Src");
 
     const capped = await buildSession(env.DB, { ahead: false, sourceId: src, cap: 1 }, now);

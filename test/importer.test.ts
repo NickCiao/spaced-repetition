@@ -205,4 +205,23 @@ describe("export / import / restore", () => {
     const body = await res2.json() as any;
     expect(body.restored).toEqual({ sources: 0, prompts: 0, events: 0 });
   });
+
+  it("a capture's note round-trips through export and restore", async () => {
+    const cap = await jpost("/api/capture", { text: "note-cap", note: "remember this bit" });
+    const { id: capId } = await cap.json() as { id: string };
+
+    const files = await download();
+    expect(strFromU8(files[`inbox/${capId}.md`])).toContain("note: remember this bit");
+
+    await env.DB.prepare("DELETE FROM events").run();
+    await env.DB.prepare("DELETE FROM prompts").run();
+    await env.DB.prepare("DELETE FROM sources").run();
+    await env.DB.prepare("DELETE FROM captures").run();
+
+    const res = await post("/import?apply=1&restore=1", zipSync(files));
+    expect(res.status).toBe(200);
+
+    const row = await env.DB.prepare("SELECT note FROM captures WHERE id = ?").bind(capId).first();
+    expect(row?.note).toBe("remember this bit");
+  });
 });

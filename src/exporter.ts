@@ -38,6 +38,9 @@ export async function buildExportZip(env: Env): Promise<Uint8Array> {
     let front = `---\ncaptured: ${c.created_at}\n`;
     if (c.url) front += `url: ${c.url}\n`;
     if (c.title) front += `title: ${c.title}\n`;
+    // Frontmatter is one value per line; a multi-line note is flattened to a single
+    // line here (annotation, bounded loss — the note is a hint, not authored content).
+    if (c.note) front += `note: ${c.note.replace(/\s*[\r\n]+\s*/g, " ")}\n`;
     if (c.image_id) front += `image: ${c.image_id}\n`;
     files[`inbox/${c.id}.md`] = strToU8(front + "---\n\n" + c.text + "\n");
   }

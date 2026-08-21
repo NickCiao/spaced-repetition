@@ -105,13 +105,18 @@ export async function promptApi(request: Request, env: Env): Promise<Response> {
     return Response.json({ error: "answer required for qa" }, { status: 400 });
 
   const ts = nowIso();
+  // Trailing whitespace is stripped at write, matching the tail-trimming the
+  // interchange format already does on parse — otherwise a round-tripped export
+  // would diff against the DB row and show up as a phantom dry-run edit.
+  const question = b.question.replace(/\s+$/, "");
+  const answer = b.kind === "cloze" ? "" : (b.answer ?? "").replace(/\s+$/, "");
   if (b.id) {
     const existing = await env.DB.prepare("SELECT id FROM prompts WHERE id = ?").bind(b.id).first();
     if (!existing) return Response.json({ error: "unknown prompt" }, { status: 404 });
     await env.DB.prepare(
       `UPDATE prompts SET kind=?, question=?, answer=?, retired=?, updated_at=?
         ${b.clear_flag ? ", flag_note=NULL" : ""} WHERE id=?`
-    ).bind(b.kind, b.question, b.kind === "cloze" ? "" : (b.answer ?? ""), b.retired ? 1 : 0, ts, b.id).run();
+    ).bind(b.kind, question, answer, b.retired ? 1 : 0, ts, b.id).run();
     return Response.json({ ok: true, id: b.id });
   }
   const id = newId();
@@ -122,7 +127,7 @@ export async function promptApi(request: Request, env: Env): Promise<Response> {
      VALUES (?, ?, ?, ?, ?,
        (SELECT COALESCE(MAX(position), -1) + 1 FROM prompts WHERE source_id = ?), ?, ?,
        ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(id, b.source_id, b.kind, b.question, b.kind === "cloze" ? "" : (b.answer ?? ""), b.source_id, ts, ts,
+  ).bind(id, b.source_id, b.kind, question, answer, b.source_id, ts, ts,
          f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
          f.reps, f.lapses, f.state, f.last_review).run();
   return Response.json({ ok: true, id });

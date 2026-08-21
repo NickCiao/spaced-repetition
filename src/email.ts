@@ -7,7 +7,7 @@ export function localHour(now: Date, timeZone: string): number {
   return parseInt(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone }).format(now), 10) % 24;
 }
 
-function localDate(now: Date, timeZone: string): string {
+export function localDate(now: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone }).format(now); // YYYY-MM-DD
 }
 
