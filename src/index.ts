@@ -6,6 +6,7 @@ import { serveAsset, uploadAsset } from "./routes/assets";
 import { deleteCapture, inboxPage, previewApi, refineApi, refinePage } from "./routes/inbox";
 import { browseIndex, browseSource, promptApi, promptForm } from "./routes/browse";
 import { settingsApi, settingsPage } from "./routes/settings";
+import { exportZip, importZip } from "./routes/transfer";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -37,6 +38,8 @@ export default {
     if (url.pathname === "/api/prompt" && request.method === "POST") return promptApi(request, env);
     if (url.pathname === "/settings" && request.method === "GET") return settingsPage(env);
     if (url.pathname === "/api/settings" && request.method === "POST") return settingsApi(request, env);
+    if (url.pathname === "/export.zip" && request.method === "GET") return exportZip(env);
+    if (url.pathname === "/import" && request.method === "POST") return importZip(request, env);
     return new Response("not found", { status: 404 });
   },
 
