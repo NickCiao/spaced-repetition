@@ -293,4 +293,13 @@ describe("browse, prompt edit, settings", () => {
     const res = await POST("/api/settings", { session_cap: 20, desired_retention: 0.9, email_hour: 7 });
     expect(res.status).toBe(400);
   });
+
+  it("cloze answers are normalized to empty", async () => {
+    const sid2 = newId();
+    await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Cz', NULL, '{}', ?)").bind(sid2, nowIso()).run();
+    const res = await POST("/api/prompt", { source_id: sid2, kind: "cloze", question: "Hide {{x}}.", answer: "junk" });
+    const { id } = await res.json() as { id: string };
+    const row = await env.DB.prepare("SELECT answer FROM prompts WHERE id = ?").bind(id).first();
+    expect(row?.answer).toBe("");
+  });
 });

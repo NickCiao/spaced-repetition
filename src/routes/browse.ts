@@ -111,7 +111,7 @@ export async function promptApi(request: Request, env: Env): Promise<Response> {
     await env.DB.prepare(
       `UPDATE prompts SET kind=?, question=?, answer=?, retired=?, updated_at=?
         ${b.clear_flag ? ", flag_note=NULL" : ""} WHERE id=?`
-    ).bind(b.kind, b.question, b.answer ?? "", b.retired ? 1 : 0, ts, b.id).run();
+    ).bind(b.kind, b.question, b.kind === "cloze" ? "" : (b.answer ?? ""), b.retired ? 1 : 0, ts, b.id).run();
     return Response.json({ ok: true, id: b.id });
   }
   const id = newId();
@@ -122,7 +122,7 @@ export async function promptApi(request: Request, env: Env): Promise<Response> {
      VALUES (?, ?, ?, ?, ?,
        (SELECT COALESCE(MAX(position), -1) + 1 FROM prompts WHERE source_id = ?), ?, ?,
        ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(id, b.source_id, b.kind, b.question, b.answer ?? "", b.source_id, ts, ts,
+  ).bind(id, b.source_id, b.kind, b.question, b.kind === "cloze" ? "" : (b.answer ?? ""), b.source_id, ts, ts,
          f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
          f.reps, f.lapses, f.state, f.last_review).run();
   return Response.json({ ok: true, id });

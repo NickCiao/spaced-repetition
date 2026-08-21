@@ -112,7 +112,7 @@ export async function refineApi(request: Request, env: Env): Promise<Response> {
         `INSERT INTO prompts (id, source_id, kind, question, answer, position, created_at, updated_at,
           due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(id, sourceId, p.kind, p.question, p.answer ?? "", pos++, ts, ts,
+      ).bind(id, sourceId, p.kind, p.question, p.kind === "cloze" ? "" : (p.answer ?? ""), pos++, ts, ts,
              f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
              f.reps, f.lapses, f.state, f.last_review);
     });

@@ -73,6 +73,20 @@ describe("interchange format", () => {
       .toThrow(FormatError);
   });
 
+  it("render refuses ids, meta, cloze answers, and names that cannot round-trip", () => {
+    expect(() => renderSourceFile(src, [{ id: "abc-123-def", kind: "qa", question: "q?", answer: "a." }])).toThrow(FormatError);
+    expect(() => renderSourceFile({ name: "S", url: null, meta: '{"x:evil":"v"}' }, [])).toThrow(FormatError);
+    expect(() => renderSourceFile({ name: "S", url: null, meta: '{"note":"line1\nline2"}' }, [])).toThrow(FormatError);
+    expect(() => renderSourceFile({ name: "S", url: null, meta: "{not json" }, [])).toThrow(FormatError);
+    expect(() => renderSourceFile({ name: "", url: null, meta: "{}" }, [])).toThrow(FormatError);
+    expect(() => renderSourceFile(src, [{ id: "cccccccccc", kind: "cloze", question: "Hide {{x}}.", answer: "stray" }])).toThrow(FormatError);
+  });
+
+  it("parses CRLF input identically to LF", () => {
+    const text = renderSourceFile(src, prompts);
+    expect(parseSourceFile(text.replace(/\n/g, "\r\n"), "p.md")).toEqual(parseSourceFile(text, "p.md"));
+  });
+
   it("sourceFileName slugs safely", () => {
     expect(sourceFileName("Why We Think — Lilian Weng!", "abc123def0"))
       .toBe("prompts/why-we-think-lilian-weng-abc123def0.md");
