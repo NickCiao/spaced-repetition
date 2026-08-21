@@ -33,4 +33,15 @@ describe("auth", () => {
     const res = await SELF.fetch("http://sr/anything", { headers: { Cookie: "sr=test-token" } });
     expect(res.status).toBe(404);
   });
+
+  it("wrong ?token= gets 401 and sets no cookie", async () => {
+    const res = await SELF.fetch("http://sr/somewhere?token=wrong", { redirect: "manual" });
+    expect(res.status).toBe(401);
+    expect(res.headers.get("Set-Cookie")).toBeNull();
+  });
+
+  it("public path matching is exact", async () => {
+    expect((await SELF.fetch("http://sr/healthx")).status).toBe(401);      // /health must not prefix-match
+    expect((await SELF.fetch("http://sr/static/nonexistent")).status).not.toBe(401); // /static/* bypasses auth
+  });
 });
