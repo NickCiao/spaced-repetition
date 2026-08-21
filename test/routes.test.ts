@@ -112,4 +112,11 @@ describe("review", () => {
     const pid = await seedReviewPrompt();
     expect((await POST("/api/grade", { prompt_id: pid, action: "sideways" })).status).toBe(400);
   });
+
+  it("flag with empty note stores the fallback", async () => {
+    const pid = await seedReviewPrompt();
+    await POST("/api/grade", { prompt_id: pid, action: "flag", note: "" });
+    const row = await env.DB.prepare("SELECT flag_note FROM prompts WHERE id = ?").bind(pid).first();
+    expect(row?.flag_note).toBe("flagged");
+  });
 });

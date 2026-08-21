@@ -2,7 +2,7 @@ import type { Env } from "../env.d";
 import { getSettings, nowIso, type PromptRow } from "../db";
 import { applyGrade } from "../scheduler";
 import { buildSession } from "../session";
-import { escapeHtml, page } from "../html";
+import { page } from "../html";
 
 export async function reviewPage(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -48,7 +48,7 @@ export async function gradeApi(request: Request, env: Env): Promise<Response> {
            f.reps, f.lapses, f.state, f.last_review, ts, p.id).run();
   } else if (b.action === "flag") {
     await env.DB.prepare("UPDATE prompts SET flag_note=?, updated_at=? WHERE id=?")
-      .bind(b.note ?? "flagged", ts, p.id).run();
+      .bind((b.note ?? "").trim() || "flagged", ts, p.id).run();
   } else if (b.action === "retire") {
     await env.DB.prepare("UPDATE prompts SET retired=1, updated_at=? WHERE id=?").bind(ts, p.id).run();
   } // skip: event only

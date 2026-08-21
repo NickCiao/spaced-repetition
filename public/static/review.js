@@ -3,6 +3,10 @@
   const el = document.getElementById("review");
   let i = 0, revealed = false;
 
+  // sourceName/sourceUrl are raw DB strings — escape at the DOM boundary.
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
   function finish() {
     let html = '<div class="done">';
     if (session.dueRemaining > 0) {
@@ -22,18 +26,25 @@
 
   async function grade(action, note) {
     const card = session.cards[i];
-    await fetch("/api/grade", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt_id: card.id, action, note })
-    });
+    try {
+      const res = await fetch("/api/grade", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt_id: card.id, action, note })
+      });
+      if (!res.ok) throw new Error(String(res.status));
+    } catch {
+      alert("Couldn't save that grade — check your connection and try again.");
+      return; // stay on this card; nothing advanced, nothing lost silently
+    }
     i += 1; revealed = false;
     i < session.cards.length ? render() : finish();
   }
 
   function render() {
     const c = session.cards[i];
-    const src = c.sourceUrl
-      ? `<a href="${c.sourceUrl}" target="_blank" rel="noopener">${c.sourceName}</a>` : c.sourceName;
+    const src = c.sourceUrl && /^https?:\/\//i.test(c.sourceUrl)
+      ? `<a href="${esc(c.sourceUrl)}" target="_blank" rel="noopener">${esc(c.sourceName)}</a>`
+      : esc(c.sourceName);
     el.innerHTML = `
       <div class="card">
         <div>${revealed && c.kind === "cloze" ? c.answerHtml : c.questionHtml}</div>
