@@ -2281,6 +2281,26 @@ describe("browse, prompt edit, settings", () => {
     // restore defaults for other tests
     await POST("/api/settings", { session_cap: 20, desired_retention: 0.9, email_hour: 7, timezone: "America/Los_Angeles" });
   });
+
+  it("prompt/new rejects malformed or unknown source ids", async () => {
+    const evil = await SELF.fetch(`http://sr/prompt/new?source=${encodeURIComponent('x"><script>1</script>')}`, AUTH);
+    expect(evil.status).toBe(404);
+    const unknown = await SELF.fetch("http://sr/prompt/new?source=zzzzzzzzzz", AUTH);
+    expect(unknown.status).toBe(404);
+  });
+
+  it("javascript: source urls never render as links", async () => {
+    const sid = newId();
+    await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Sketchy', 'javascript:alert(1)', '{}', ?)")
+      .bind(sid, nowIso()).run();
+    const html = await (await SELF.fetch(`http://sr/browse/${sid}`, AUTH)).text();
+    expect(html).not.toContain('href="javascript:');
+  });
+
+  it("omitted timezone is a 400, not a crash", async () => {
+    const res = await POST("/api/settings", { session_cap: 20, desired_retention: 0.9, email_hour: 7 });
+    expect(res.status).toBe(400);
+  });
 });
 ```
 
@@ -2323,7 +2343,7 @@ export async function browseSource(sourceId: string, env: Env): Promise<Response
     </div>`).join("") || "<p class='source'>No prompts.</p>";
   const body = `${NAV}
 <h1>${escapeHtml(src.name)}</h1>
-${src.url ? `<p class="source"><a href="${escapeHtml(src.url)}">${escapeHtml(src.url)}</a></p>` : ""}
+${src.url && /^https?:\/\//i.test(src.url) ? `<p class="source"><a href="${escapeHtml(src.url)}">${escapeHtml(src.url)}</a></p>` : ""}
 <div class="btnrow">
   <a class="btn" href="/?source=${src.id}">Review this source now</a>
   <a class="btn" href="/?source=${src.id}&ahead=1">Review ahead</a>
@@ -2340,13 +2360,18 @@ export async function promptForm(idOrNew: string, request: Request, env: Env): P
     p = await env.DB.prepare("SELECT * FROM prompts WHERE id = ?").bind(idOrNew).first<PromptRow>();
     if (!p) return new Response("not found", { status: 404 });
     sourceId = p.source_id;
+  } else {
+    // Query param is attacker-reachable: require a well-formed id naming a real source.
+    if (!/^[a-z0-9]{10}$/.test(sourceId)) return new Response("not found", { status: 404 });
+    const src = await env.DB.prepare("SELECT id FROM sources WHERE id = ?").bind(sourceId).first();
+    if (!src) return new Response("not found", { status: 404 });
   }
   const body = `${NAV}
 <h1>${p ? "Edit prompt" : "New prompt"}</h1>
 ${p?.flag_note ? `<p class="source">flag: ${escapeHtml(p.flag_note)}</p>` : ""}
 <form method="post" action="/api/prompt" onsubmit="return submitPrompt(event)">
-  <input type="hidden" id="pid" value="${p?.id ?? ""}">
-  <input type="hidden" id="sid" value="${sourceId}">
+  <input type="hidden" id="pid" value="${escapeHtml(p?.id ?? "")}">
+  <input type="hidden" id="sid" value="${escapeHtml(sourceId)}">
   <label>Kind</label>
   <select id="kind"><option value="qa"${p?.kind !== "cloze" ? " selected" : ""}>Q / A</option>
   <option value="cloze"${p?.kind === "cloze" ? " selected" : ""}>Cloze</option></select>
@@ -2422,7 +2447,7 @@ export async function promptApi(request: Request, env: Env): Promise<Response> {
 ```ts
 import type { Env } from "../env.d";
 import { getSettings, setSetting } from "../db";
-import { page } from "../html";
+import { escapeHtml, page } from "../html";
 
 export async function settingsPage(env: Env): Promise<Response> {
   const s = await getSettings(env.DB);
@@ -2433,7 +2458,7 @@ export async function settingsPage(env: Env): Promise<Response> {
   <label>Session cap</label><input type="text" id="session_cap" value="${s.session_cap}">
   <label>Desired retention (0.7–0.97)</label><input type="text" id="desired_retention" value="${s.desired_retention}">
   <label>Reminder hour (0–23, local)</label><input type="text" id="email_hour" value="${s.email_hour}">
-  <label>Timezone</label><input type="text" id="timezone" value="${s.timezone}">
+  <label>Timezone</label><input type="text" id="timezone" value="${escapeHtml(s.timezone)}">
   <div class="btnrow"><button class="primary">Save</button></div>
   <p class="flash" id="flash"></p>
 </form>
@@ -2482,6 +2507,8 @@ export async function settingsApi(request: Request, env: Env): Promise<Response>
     return Response.json({ error: "desired_retention must be 0.7–0.97" }, { status: 400 });
   if (!Number.isInteger(b.email_hour) || b.email_hour! < 0 || b.email_hour! > 23)
     return Response.json({ error: "email_hour must be 0–23" }, { status: 400 });
+  if (typeof b.timezone !== "string" || !b.timezone.trim())
+    return Response.json({ error: "timezone required" }, { status: 400 }); // undefined never throws in Intl
   try { new Intl.DateTimeFormat("en-US", { timeZone: b.timezone }); }
   catch { return Response.json({ error: "unknown timezone" }, { status: 400 }); }
 
