@@ -2,7 +2,7 @@
 
 People are _**surprisingly**_ bad at retaining what they read (here's a [really good article](https://andymatuschak.org/books/) on the topic by AndyM).
 
-After searching high and low, there doesn't appear to be any existing flashcard or spaced-repetition tool on the market that solves the following problems:
+After searching high and low, there doesn't appear to be any existing flashcard or spaced-repetition app on the market that solves the following problems:
 
 1. Make it low-effort to capture the raw context around something worth remembering (e.g. when reading physical/digital books, pdfs, webpages, conversations with an AI, podcasts, etc). 
 2. Refining that raw context into a pedagogically correct memory prompt (e.g. a flashcard).
@@ -10,7 +10,9 @@ After searching high and low, there doesn't appear to be any existing flashcard 
 
 I tried both [Mochi](https://mochi.cards/) & [Anki](https://apps.ankiweb.net/) (Mochi is basically Anki with better UI), but they both assume that you're sitting down with the app open, with your focus being primarily centered on creating flash cards or reviewing flash cards. They also don't notify you based on a spaced-repetition schedule.
 
-I've also looked at [Orbit](https://github.com/andymatuschak/orbit) (as you can probably tell, I'm a big fan of AndyM's work), but it's primarily targeting writers, giving them a tool to create content in the style of [Quantum Country](https://quantum.country/).  With that being said, Orbit does introduce two really useful abstractions: a Task (e.g. a thing that you want to remember), and a Scheduler (which decides when each Task is due for review, and when to notify you).
+I've also looked at [Orbit](https://github.com/andymatuschak/orbit) (I'm a big fan of AndyM's work), but it's primarily targeting writers, giving them a tool to create content in the style of [Quantum Country](https://quantum.country/).  With that being said, Orbit does introduce two really useful abstractions: a Task (e.g. a thing that you want to remember), and a Scheduler (which decides when each Task is due for review, and when to notify you).
+
+At a high level, this project consists of a few companion pieces of software that helps make memory augmentation an ambient layer over whatever it is that you're reading or thinking about. This is software that assists you in capturing ideas in-context with minimal interruption, help turn those raw captures into good memory retrieval prompts, and then intelligently resurface them for review at the right time to maximize long-term retention while minimizing practice time.
 
 ## Deploy (once)
 
