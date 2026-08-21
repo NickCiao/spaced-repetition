@@ -57,7 +57,7 @@ The `spaced-repetition` repo contains only the tool — code and docs, no person
 | Math | KaTeX with self-hosted assets, `$…$` / `$$…$$` | Technical reading needs it; self-hosting avoids a CDN dependency that could rot or vanish. |
 | Sources | Free-text name + optional URL | Books, papers, PDFs, podcasts, and chat conversations are all just descriptions; a URL adds a link when one exists. Unknown frontmatter fields pass through untouched. |
 | Reminders | Daily email; decays to weekly when ignored | The proven Quantum Country pattern: a tiny framed commitment ("6 prompts · ~2 min") with a deep link. After 4 consecutive un-actioned daily reminders, cadence drops to weekly until the next review, then resumes. The reminder respects attention rather than fighting for it. |
-| Backup | Manual export only, plus D1 Time Travel (30-day PITR) | Deliberate simplicity: no mirror repos, no snapshot automation, no tokens to rotate. Accepted risk, recorded in §9: changes since the last manual export are exposed to catastrophic vendor/account loss. |
+| Backup | Manual export only, plus D1 Time Travel (point-in-time restore: 30 days on Workers Paid, 7 days on Free) | Deliberate simplicity: no mirror repos, no snapshot automation, no tokens to rotate. Accepted risk, recorded in §9: changes since the last manual export are exposed to catastrophic vendor/account loss. |
 | Ahead-of-schedule review | Allowed anywhere; every review is recorded and fed to FSRS — there is no separate practice mode | FSRS assumes it observes all retrievals, and it handles early ones natively: success while recall is still likely yields only a small stability bump (drilling can't inflate the schedule), while failing early is exactly the signal that card needed. Unrecorded practice would make the scheduler's model diverge from actual memory. |
 | Metrics | None | No streaks, no stats, no counters. The only numbers ever shown are what's due now and when the next review lands. |
 
@@ -106,7 +106,7 @@ When the review log is large enough (~1,000+ events), personal FSRS weights can 
 |---|---|
 | Import parse error or duplicate ID | Whole import rejected with file/line detail; nothing partial applied |
 | Email provider down | Cron fires again next day; review is never blocked on email |
-| Accidental data damage | D1 Time Travel: point-in-time restore within 30 days |
+| Accidental data damage | D1 Time Travel: point-in-time restore within the plan's window (30 days on Workers Paid, 7 on Free) |
 | Vendor/account loss | Restore from the latest manual export. **Accepted gap**: anything since that export is lost. Chosen deliberately for simplicity; revisit if the export habit proves rarer than assumed. |
 | Leaked token | Rotate the Worker secret; all old links and cookies die |
 | Capture while offline | PWA queue, flushed on reconnection; share-sheet path fails loudly rather than pretending |

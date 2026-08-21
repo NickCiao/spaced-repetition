@@ -16,8 +16,6 @@ npx wrangler secret put RESEND_API_KEY   # from resend.com (free tier)
 npx wrangler deploy
 ```
 
-The export zip includes `retired.jsonl` (retired prompts' content archive). To un-retire a prompt, re-add its block with its `<!-- id -->` comment into its source file during import.
-
 Open `https://<your-worker>/?token=<SR_TOKEN>` once per browser; the cookie does the rest.
 On the phone: open `/capture`, then Share → Add to Home Screen.
 
@@ -54,6 +52,8 @@ curl -H "Authorization: Bearer $SR_TOKEN" --data-binary @export.zip "https://<yo
 
 Restore onto a blank deploy: `.../import?apply=1&restore=1`.
 
+The export zip includes `retired.jsonl` (retired prompts' content archive). To un-retire a prompt, re-add its block with its `<!-- id -->` comment into its source file during import.
+
 ## Backup
 
-Manual by design: Settings → "Download everything" (or the curl above), whenever you think of it. D1 Time Travel covers the last 30 days.
+Manual by design: Settings → "Download everything" (or the curl above), whenever you think of it. D1 Time Travel adds an in-vendor safety net — point-in-time restore for 30 days on Workers Paid, 7 days on Free.
