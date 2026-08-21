@@ -1231,7 +1231,7 @@ import type { Env } from "../env.d";
 import { getSettings, nowIso, type PromptRow } from "../db";
 import { applyGrade } from "../scheduler";
 import { buildSession } from "../session";
-import { escapeHtml, page } from "../html";
+import { page } from "../html";
 
 export async function reviewPage(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -1277,7 +1277,7 @@ export async function gradeApi(request: Request, env: Env): Promise<Response> {
            f.reps, f.lapses, f.state, f.last_review, ts, p.id).run();
   } else if (b.action === "flag") {
     await env.DB.prepare("UPDATE prompts SET flag_note=?, updated_at=? WHERE id=?")
-      .bind(b.note ?? "flagged", ts, p.id).run();
+      .bind((b.note ?? "").trim() || "flagged", ts, p.id).run();
   } else if (b.action === "retire") {
     await env.DB.prepare("UPDATE prompts SET retired=1, updated_at=? WHERE id=?").bind(ts, p.id).run();
   } // skip: event only
@@ -1336,6 +1336,9 @@ h1 { font-size:20px; } h2 { font-size:17px; }
   const session = JSON.parse(document.getElementById("session").textContent);
   const el = document.getElementById("review");
   let i = 0, revealed = false;
+  // sourceName/sourceUrl are raw DB strings — escape at the DOM boundary.
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
   function finish() {
     let html = '<div class="done">';
@@ -1356,18 +1359,25 @@ h1 { font-size:20px; } h2 { font-size:17px; }
 
   async function grade(action, note) {
     const card = session.cards[i];
-    await fetch("/api/grade", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt_id: card.id, action, note })
-    });
+    try {
+      const res = await fetch("/api/grade", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt_id: card.id, action, note })
+      });
+      if (!res.ok) throw new Error(String(res.status));
+    } catch {
+      alert("Couldn't save that grade — check your connection and try again.");
+      return; // stay on this card; nothing advanced, nothing lost silently
+    }
     i += 1; revealed = false;
     i < session.cards.length ? render() : finish();
   }
 
   function render() {
     const c = session.cards[i];
-    const src = c.sourceUrl
-      ? `<a href="${c.sourceUrl}" target="_blank" rel="noopener">${c.sourceName}</a>` : c.sourceName;
+    const src = c.sourceUrl && /^https?:\/\//i.test(c.sourceUrl)
+      ? `<a href="${esc(c.sourceUrl)}" target="_blank" rel="noopener">${esc(c.sourceName)}</a>`
+      : esc(c.sourceName);
     el.innerHTML = `
       <div class="card">
         <div>${revealed && c.kind === "cloze" ? c.answerHtml : c.questionHtml}</div>
