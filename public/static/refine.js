@@ -2,6 +2,10 @@
   const root = document.getElementById("refine");
   const prompts = [];
 
+  // dataset values decode HTML entities — re-escape at every DOM re-interpolation.
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
   function promptForm() {
     return `
 <div class="card" data-i="${prompts.length}">
@@ -19,7 +23,7 @@
   function render() {
     root.innerHTML = `
 <label>Source</label>
-<input type="text" id="src-name" list="source-list" value="${root.dataset.sourceName}">
+<input type="text" id="src-name" list="source-list" value="${esc(root.dataset.sourceName)}">
 <datalist id="source-list"></datalist>
 <div id="forms">${promptForm()}</div>
 <div class="btnrow"><button id="add">+ prompt</button><button id="save" class="primary">Save prompts</button></div>
@@ -29,7 +33,7 @@
       const res = await fetch(`/api/sources?q=${encodeURIComponent(e.target.value)}`);
       const { items } = await res.json();
       document.getElementById("source-list").innerHTML =
-        items.map((s) => `<option value="${s.name.replace(/"/g, "&quot;")}">`).join("");
+        items.map((s) => `<option value="${esc(s.name)}">`).join("");
     };
     document.getElementById("add").onclick = () =>
       document.getElementById("forms").insertAdjacentHTML("beforeend", promptForm());
