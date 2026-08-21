@@ -118,3 +118,11 @@ TDD throughout. The highest-risk logic is pure and tested first: golden tests fo
 ## 11. Future directions
 
 Four extensions the design leaves room for: **agent-assisted refinement** (Agent drafts prompts from captures via the refactor loop; Nick curates); **agent-assisted capture** — given the entire source material (an article, a paper, a book chapter), an agent proposes candidate prompts for the whole piece, which enter the same inbox for curation rather than becoming prompts directly, so control over what's worth remembering — and the encoding value of engaging with each prompt — stays with Nick; **personal FSRS weights** fitted from the review log; and **progressive memory prompts** — prompts whose content changes over time in a programmed, author-defined sequence, e.g. deepening from recognition toward application and connection as recall succeeds. Prompt identity plus the append-only event log already give each card the history needed to drive stage advancement, so this is a format extension (a staged prompt variant in the interchange files), not a rework.
+
+## 12. References
+
+- Nielsen, [*Augmenting Long-term Memory*](https://augmentingcognition.com/ltm.html) — grounds the prompt-writing principles (atomicity, no orphans, 5–20 per source), self-authoring as encoding (§2), and the sustainability rules: quotas, backlog forgiveness, simple formats.
+- Matuschak, [*Mnemonic medium*](https://notes.andymatuschak.org/zKPv6qkSErdRGqyryvgS2wS) — retrieval practice woven into reading; the habit-formation and attention cautions behind the decaying reminder and the absence of guilt mechanics.
+- [*Quantum Country*](https://quantum.country/qcvc) and its [review loop](https://quantum.country/review) — the living referent for review UX: binary grading, tiny-commitment reminder emails deep-linking into a short session.
+- Matuschak & Nielsen, [*Timeful texts*](https://numinous.productions/timeful/) — the seed of the progressive-memory-prompts direction (§11).
+- FSRS: [the algorithm](https://github.com/open-spaced-repetition/fsrs4anki/wiki/The-Algorithm) and [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs), the implementation §6 builds on.
