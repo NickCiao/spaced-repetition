@@ -1812,8 +1812,11 @@ export async function uploadAsset(request: Request, env: Env): Promise<Response>
   const existing = await env.DB.prepare("SELECT id FROM assets WHERE id = ?").bind(id).first();
   if (!existing) {
     await env.BUCKET.put(id, buf, { httpMetadata: { contentType: type } });
-    await env.DB.prepare("INSERT INTO assets (id, content_type, bytes, created_at) VALUES (?, ?, ?, ?)")
-      .bind(id, type, buf.byteLength, nowIso()).run();
+    // ON CONFLICT: two concurrent uploads of the same bytes must both get {id},
+    // not a constraint crash for the loser. R2 put is an idempotent overwrite.
+    await env.DB.prepare(
+      "INSERT INTO assets (id, content_type, bytes, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING"
+    ).bind(id, type, buf.byteLength, nowIso()).run();
   }
   return Response.json({ id });
 }
