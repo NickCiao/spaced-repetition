@@ -102,4 +102,74 @@ describe("export / import / restore", () => {
     expect(after?.stability).toBe(before?.stability);
     expect(after?.due).toBe(before?.due);
   });
+
+  it("retired prompts survive export/restore; un-retired prompts stay active", async () => {
+    const cap = await jpost("/api/capture", { text: "seed3", title: "Archive Source", url: "https://arc.example" });
+    const { id: capId } = await cap.json() as { id: string };
+    const ref = await jpost("/api/refine", {
+      capture_id: capId, source: { name: "Archive Source", url: "https://arc.example" },
+      prompts: [
+        { kind: "qa", question: "AQ-stays-retired?", answer: "AA1" },
+        { kind: "qa", question: "AQ-comes-back?", answer: "AA2" }
+      ]
+    });
+    const { prompt_ids } = await ref.json() as { prompt_ids: string[] };
+    const [stayRetired, comesBack] = prompt_ids;
+
+    // stays retired: retire it and leave it alone (retire logs an event)
+    await jpost("/api/grade", { prompt_id: stayRetired, action: "retire" });
+    // comes back: retire it too (so it has a historical retire event), then un-retire
+    // it via the edit form — that path flips the field directly and logs no event.
+    await jpost("/api/grade", { prompt_id: comesBack, action: "retire" });
+    const row = await env.DB.prepare("SELECT source_id FROM prompts WHERE id = ?").bind(comesBack).first();
+    await jpost("/api/prompt", {
+      id: comesBack, source_id: row!.source_id, kind: "qa", question: "AQ-comes-back?", answer: "AA2", retired: false
+    });
+    expect((await env.DB.prepare("SELECT retired FROM prompts WHERE id = ?").bind(stayRetired).first())?.retired).toBe(1);
+    expect((await env.DB.prepare("SELECT retired FROM prompts WHERE id = ?").bind(comesBack).first())?.retired).toBe(0);
+
+    const files = await download();
+    expect(Object.keys(files)).toContain("retired.jsonl");
+
+    await env.DB.prepare("DELETE FROM events").run();
+    await env.DB.prepare("DELETE FROM prompts").run();
+    await env.DB.prepare("DELETE FROM sources").run();
+    await env.DB.prepare("DELETE FROM captures").run();
+
+    const res = await post("/import?apply=1&restore=1", zipSync(files));
+    expect(res.status).toBe(200);
+
+    const after1 = await env.DB.prepare(
+      "SELECT retired, question, answer, kind FROM prompts WHERE id = ?"
+    ).bind(stayRetired).first();
+    expect(after1?.retired).toBe(1);
+    expect(after1?.question).toBe("AQ-stays-retired?");
+    expect(after1?.answer).toBe("AA1");
+    expect(after1?.kind).toBe("qa");
+
+    const after2 = await env.DB.prepare("SELECT retired FROM prompts WHERE id = ?").bind(comesBack).first();
+    expect(after2?.retired).toBe(0);
+  });
+
+  it("re-adding a retired prompt's block un-retires it on import", async () => {
+    const retiredRow = await env.DB.prepare(
+      "SELECT id, question, answer FROM prompts WHERE question = 'AQ-stays-retired?'"
+    ).first<{ id: string; question: string; answer: string }>();
+    const rid = retiredRow!.id;
+
+    const files = await download();
+    const mdName = Object.keys(files).find(n => n.startsWith("prompts/") && strFromU8(files[n]).includes("source: Archive Source"))!;
+    const text = strFromU8(files[mdName]) + `\nQ: ${retiredRow!.question}\nA: ${retiredRow!.answer}\n<!-- id: ${rid} -->\n`;
+    files[mdName] = strToU8(text);
+
+    const dry = await (await post("/import?apply=0", zipSync(files))).json() as any;
+    expect(dry.diff.errors).toEqual([]);          // re-adding a retired id is not an unknown-id error
+    expect(dry.diff.edited).toContain(rid);
+
+    const applied = await (await post("/import?apply=1", zipSync(files))).json() as any;
+    expect(applied.applied).toEqual({ new: 0, edited: 1, retired: 0 });
+
+    const after = await env.DB.prepare("SELECT retired FROM prompts WHERE id = ?").bind(rid).first();
+    expect(after?.retired).toBe(0);
+  });
 });

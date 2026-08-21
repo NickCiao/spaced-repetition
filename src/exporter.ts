@@ -15,6 +15,18 @@ export async function buildExportZip(env: Env): Promise<Uint8Array> {
     files[sourceFileName(s.name, s.id)] = strToU8(renderSourceFile(s, prompts));
   }
 
+  // Retired prompts stay out of the authoring files (those must reflect the active,
+  // editable set) but must not be lost from the export — archive them separately so
+  // restore can rebuild the complete system state, not just what's currently active.
+  const retired = (await env.DB.prepare(
+    `SELECT p.id, p.kind, p.question, p.answer, p.position, s.name AS source_name
+     FROM prompts p JOIN sources s ON s.id = p.source_id
+     WHERE p.retired = 1 ORDER BY p.source_id, p.position`
+  ).all<{ id: string; kind: "qa" | "cloze"; question: string; answer: string; position: number; source_name: string }>()).results;
+  files["retired.jsonl"] = strToU8(retired.map(p => JSON.stringify({
+    id: p.id, source_name: p.source_name, kind: p.kind, question: p.question, answer: p.answer, position: p.position
+  })).join("\n") + (retired.length ? "\n" : ""));
+
   const events = (await env.DB.prepare("SELECT * FROM events ORDER BY id").all<EventRow>()).results;
   files["log/reviews.jsonl"] = strToU8(events.map(e => JSON.stringify({
     ts: e.ts, prompt_id: e.prompt_id, action: e.action,
