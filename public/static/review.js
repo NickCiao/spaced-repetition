@@ -9,7 +9,7 @@
 
   // nextDueCount is only meaningful alongside a real nextDue date; when nextDue is
   // null the count is always 0, so the suffix naturally disappears too.
-  const dueSuffix = () => session.nextDueCount ? ` (${session.nextDueCount} prompts)` : "";
+  const dueSuffix = () => session.nextDueCount ? ` (${session.nextDueCount} prompt${session.nextDueCount === 1 ? "" : "s"})` : "";
 
   function finish() {
     let html = '<div class="done">';
