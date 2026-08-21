@@ -811,9 +811,18 @@ describe("renderMarkdown", () => {
     expect(html).not.toContain("<em>");
   });
 
-  it("rewrites relative asset refs to /assets/<id>", () => {
-    const html = renderMarkdown("![diagram](assets/abc123def0)");
-    expect(html).toContain('src="/assets/abc123def0"');
+  it("rewrites relative asset refs to /assets/<id> (32-hex ids only)", () => {
+    const id = "abc123def0abc123def0abc123def012";
+    expect(renderMarkdown(`![diagram](assets/${id})`)).toContain(`src="/assets/${id}"`);
+  });
+
+  it("hostile hrefs cannot inject markup or scripts", () => {
+    const img = renderMarkdown('![x](assets/a"onerror="alert(1))');
+    expect(img).not.toContain("<img");
+    expect(img).not.toContain('onerror="'); // escaped literal text may contain onerror=&quot; — inert
+    const link = renderMarkdown("[click](javascript:alert(1))");
+    expect(link).not.toContain("javascript:");
+    expect(link).not.toContain("<a ");
   });
 });
 
@@ -887,8 +896,15 @@ function renderWithSlots(text: string, slots: string[]): string {
       html(token: { text: string }) { return escapeHtml(token.text); },
       image(token: { href: string; text: string }) {
         const href = token.href.startsWith("assets/") ? `/${token.href}` : token.href;
-        if (!href.startsWith("/assets/")) return escapeHtml(`![${token.text}](${token.href})`);
+        // Strict id charset — anything else renders as escaped literal text.
+        // Interpolating an unvalidated href into src= is an attribute-injection XSS.
+        if (!/^\/assets\/[0-9a-f]{32}$/.test(href)) return escapeHtml(`![${token.text}](${token.href})`);
         return `<img src="${href}" alt="${escapeHtml(token.text)}" loading="lazy">`;
+      },
+      link(token: { href: string; text: string }) {
+        // http(s) only — javascript: etc. render as escaped plain text.
+        if (!/^https?:\/\//i.test(token.href)) return escapeHtml(token.text);
+        return `<a href="${escapeHtml(token.href)}" rel="noopener">${escapeHtml(token.text)}</a>`;
       }
     }
   });
