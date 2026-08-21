@@ -1966,7 +1966,7 @@ export async function inboxPage(env: Env): Promise<Response> {
   const capHtml = caps.map(c => `
     <div class="item">
       <div>${escapeHtml(c.text)}</div>
-      ${c.image_id ? `<img src="/assets/${c.image_id}" style="max-height:120px">` : ""}
+      ${c.image_id && /^[0-9a-f]{32}$/.test(c.image_id) ? `<img src="/assets/${c.image_id}" style="max-height:120px">` : ""}
       <div class="source">${escapeHtml(c.title ?? c.url ?? "")} · ${c.created_at.slice(0, 10)}</div>
       <div class="overflow"><a href="/refine/${c.id}">Refine</a>
       <a onclick="fetch('/api/capture/${c.id}/delete',{method:'POST'}).then(()=>location.reload())">Delete</a></div>
@@ -1996,8 +1996,8 @@ export async function refinePage(captureId: string, env: Env): Promise<Response>
 <nav><a href="/">Review</a> <a href="/capture">Capture</a> <a href="/inbox">Inbox</a> <a href="/browse">Browse</a> <a href="/settings">Settings</a></nav>
 <h1>Refine</h1>
 <div class="card"><div>${escapeHtml(cap.text)}</div>
-${cap.image_id ? `<img src="/assets/${cap.image_id}">` : ""}
-<div class="source">${escapeHtml(cap.title ?? "")} ${cap.url ? `· <a href="${escapeHtml(cap.url)}">${escapeHtml(cap.url)}</a>` : ""}</div></div>
+${cap.image_id && /^[0-9a-f]{32}$/.test(cap.image_id) ? `<img src="/assets/${cap.image_id}">` : ""}
+<div class="source">${escapeHtml(cap.title ?? "")} ${cap.url && /^https?:\/\//i.test(cap.url) ? `· <a href="${escapeHtml(cap.url)}">${escapeHtml(cap.url)}</a>` : ""}</div></div>
 <div id="refine"
   data-capture="${cap.id}"
   data-source-name="${escapeHtml(sourceGuess)}"
