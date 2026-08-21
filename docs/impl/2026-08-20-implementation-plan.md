@@ -2072,7 +2072,7 @@ export async function refineApi(request: Request, env: Env): Promise<Response> {
         `INSERT INTO prompts (id, source_id, kind, question, answer, position, created_at, updated_at,
           due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(id, sourceId, p.kind, p.question, p.answer ?? "", pos++, ts, ts,
+      ).bind(id, sourceId, p.kind, p.question, p.kind === "cloze" ? "" : (p.answer ?? ""), pos++, ts, ts,
              f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
              f.reps, f.lapses, f.state, f.last_review);
     });
@@ -2425,7 +2425,7 @@ export async function promptApi(request: Request, env: Env): Promise<Response> {
     await env.DB.prepare(
       `UPDATE prompts SET kind=?, question=?, answer=?, retired=?, updated_at=?
         ${b.clear_flag ? ", flag_note=NULL" : ""} WHERE id=?`
-    ).bind(b.kind, b.question, b.answer ?? "", b.retired ? 1 : 0, ts, b.id).run();
+    ).bind(b.kind, b.question, b.kind === "cloze" ? "" : (b.answer ?? ""), b.retired ? 1 : 0, ts, b.id).run();
     return Response.json({ ok: true, id: b.id });
   }
   const id = newId();
@@ -2436,7 +2436,7 @@ export async function promptApi(request: Request, env: Env): Promise<Response> {
      VALUES (?, ?, ?, ?, ?,
        (SELECT COALESCE(MAX(position), -1) + 1 FROM prompts WHERE source_id = ?), ?, ?,
        ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(id, b.source_id, b.kind, b.question, b.answer ?? "", b.source_id, ts, ts,
+  ).bind(id, b.source_id, b.kind, b.question, b.kind === "cloze" ? "" : (b.answer ?? ""), b.source_id, ts, ts,
          f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
          f.reps, f.lapses, f.state, f.last_review).run();
   return Response.json({ ok: true, id });
@@ -2644,6 +2644,20 @@ describe("interchange format", () => {
       .toThrow(FormatError);
   });
 
+  it("render refuses ids, meta, cloze answers, and names that cannot round-trip", () => {
+    expect(() => renderSourceFile(src, [{ id: "abc-123-def", kind: "qa", question: "q?", answer: "a." }])).toThrow(FormatError);
+    expect(() => renderSourceFile({ name: "S", url: null, meta: '{"x:evil":"v"}' }, [])).toThrow(FormatError);
+    expect(() => renderSourceFile({ name: "S", url: null, meta: '{"note":"line1\nline2"}' }, [])).toThrow(FormatError);
+    expect(() => renderSourceFile({ name: "S", url: null, meta: "{not json" }, [])).toThrow(FormatError);
+    expect(() => renderSourceFile({ name: "", url: null, meta: "{}" }, [])).toThrow(FormatError);
+    expect(() => renderSourceFile(src, [{ id: "cccccccccc", kind: "cloze", question: "Hide {{x}}.", answer: "stray" }])).toThrow(FormatError);
+  });
+
+  it("parses CRLF input identically to LF", () => {
+    const text = renderSourceFile(src, prompts);
+    expect(parseSourceFile(text.replace(/\n/g, "\r\n"), "p.md")).toEqual(parseSourceFile(text, "p.md"));
+  });
+
   it("sourceFileName slugs safely", () => {
     expect(sourceFileName("Why We Think — Lilian Weng!", "abc123def0"))
       .toBe("prompts/why-we-think-lilian-weng-abc123def0.md");
@@ -2683,12 +2697,27 @@ export function renderSourceFile(
   source: { name: string; url: string | null; meta: string },
   prompts: { id: string; kind: "qa" | "cloze"; question: string; answer: string }[]
 ): string {
-  const meta = JSON.parse(source.meta || "{}") as Record<string, string>;
+  // Render refuses anything that cannot round-trip exactly — silent drift on
+  // re-import would be data corruption (import treats files as desired state).
+  if (!source.name?.trim()) throw new FormatError("(render)", 1, "source name required");
+  let meta: Record<string, unknown>;
+  try { meta = JSON.parse(source.meta || "{}") as Record<string, unknown>; }
+  catch { throw new FormatError("(render)", 1, "source meta is not valid JSON"); }
+  for (const [k, v] of Object.entries(meta)) {
+    if (!/^[A-Za-z0-9_-]+$/.test(k) || k === "source" || k === "url")
+      throw new FormatError("(render)", 1, `meta key "${k}" cannot round-trip`);
+    if (typeof v !== "string" || /[\r\n]/.test(v))
+      throw new FormatError("(render)", 1, `meta value for "${k}" must be a single-line string`);
+  }
   let out = `---\nsource: ${source.name}\n`;
   if (source.url) out += `url: ${source.url}\n`;
   for (const k of Object.keys(meta).sort()) out += `${k}: ${meta[k]}\n`;
   out += "---\n";
   for (const p of prompts) {
+    if (!/^[A-Za-z0-9]+$/.test(p.id))
+      throw new FormatError("(render)", 1, `prompt id "${p.id}" cannot round-trip`);
+    if (p.kind === "cloze" && p.answer.trim() !== "")
+      throw new FormatError("(render)", 1, "cloze prompts must have an empty answer");
     checkRepresentable("(render)", p.question, "question");
     checkRepresentable("(render)", p.answer, "answer");
     out += "\n";
@@ -2700,7 +2729,7 @@ export function renderSourceFile(
 }
 
 export function parseSourceFile(text: string, path: string): ParsedFile {
-  const lines = text.split("\n");
+  const lines = text.replace(/\r\n?/g, "\n").split("\n"); // CRLF/CR input parses identically to LF
   let i = 0;
   const fail = (line: number, msg: string): never => { throw new FormatError(path, line, msg); };
 
