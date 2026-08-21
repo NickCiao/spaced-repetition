@@ -1,6 +1,16 @@
 # spaced-repetition
 
-A single-Worker personal spaced-repetition system. Design: `docs/design/2026-08-20-spaced-repetition-design.md`. No personal data lives in this repo.
+People are _**surprisingly**_ bad at retaining what they read (here's a [really good article](https://andymatuschak.org/books/) on the topic by AndyM).
+
+After searching high and low, there doesn't appear to be any existing flashcard or spaced-repetition tool on the market that solves the following problems:
+
+1. Make it low-effort to capture the raw context around something worth remembering (e.g. when reading physical/digital books, pdfs, webpages, conversations with an AI, podcasts, etc). 
+2. Refining that raw context into a pedagogically correct memory prompt (e.g. a flashcard).
+3. Notifying you on when you should **review** your memory prompts (and which ones) based on spaced-repetition schedule.
+
+I tried both [Mochi](https://mochi.cards/) & [Anki](https://apps.ankiweb.net/) (Mochi is basically Anki with better UI), but they both assume that you're sitting down with the app open, with your focus being primarily centered on creating creating flash cards or reviewing flash cards. They also don't notify you based on a spaced-repetition schedule.
+
+I've also looked at [Orbit](https://github.com/andymatuschak/orbit) (as you can probably tell, I'm a big fan of AndyM's work), but it's primarily targeting writers, giving them a tool to create content in the style of [Quantum Country](https://quantum.country/).  With that being said, Orbit does introduce two really useful abstractions: a Task (e.g. a thing that you want to memorize), and a Schedule (specifically, a memory-optimizing spaced-repetition schedule).
 
 ## Deploy (once)
 
