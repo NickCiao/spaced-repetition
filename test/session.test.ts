@@ -1,4 +1,4 @@
-import { env } from "cloudflare:test";
+import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import { newId, nowIso } from "../src/db";
 import { buildSession } from "../src/session";

@@ -1,12 +1,12 @@
-import { env, SELF } from "cloudflare:test";
+import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 
 const AUTH = { Authorization: "Bearer test-token" };
 const post = (path: string, body: BodyInit) =>
-  SELF.fetch(`http://sr${path}`, { method: "POST", headers: AUTH, body });
+  exports.default.fetch(`http://sr${path}`, { method: "POST", headers: AUTH, body });
 const jpost = (path: string, body: unknown) =>
-  SELF.fetch(`http://sr${path}`, {
+  exports.default.fetch(`http://sr${path}`, {
     method: "POST", headers: { ...AUTH, "Content-Type": "application/json" }, body: JSON.stringify(body)
   });
 
@@ -26,7 +26,7 @@ async function seedViaApi() {
 }
 
 async function download(): Promise<Record<string, Uint8Array>> {
-  const res = await SELF.fetch("http://sr/export.zip", { headers: AUTH });
+  const res = await exports.default.fetch("http://sr/export.zip", { headers: AUTH });
   expect(res.status).toBe(200);
   return unzipSync(new Uint8Array(await res.arrayBuffer()));
 }

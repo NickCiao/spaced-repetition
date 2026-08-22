@@ -1,10 +1,10 @@
-import { env, SELF } from "cloudflare:test";
+import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { newId, nowIso } from "../src/db";
 
 describe("health", () => {
   it("GET /health responds ok without auth", async () => {
-    const res = await SELF.fetch("http://sr/health");
+    const res = await exports.default.fetch("http://sr/health");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
@@ -12,17 +12,17 @@ describe("health", () => {
 
 describe("auth", () => {
   it("rejects unknown token and missing token", async () => {
-    expect((await SELF.fetch("http://sr/anything")).status).toBe(401);
-    expect((await SELF.fetch("http://sr/anything", { headers: { Authorization: "Bearer wrong" } })).status).toBe(401);
+    expect((await exports.default.fetch("http://sr/anything")).status).toBe(401);
+    expect((await exports.default.fetch("http://sr/anything", { headers: { Authorization: "Bearer wrong" } })).status).toBe(401);
   });
 
   it("accepts bearer header (404 for unknown route, not 401)", async () => {
-    const res = await SELF.fetch("http://sr/anything", { headers: { Authorization: "Bearer test-token" } });
+    const res = await exports.default.fetch("http://sr/anything", { headers: { Authorization: "Bearer test-token" } });
     expect(res.status).toBe(404);
   });
 
   it("?token= sets cookie and redirects to clean URL", async () => {
-    const res = await SELF.fetch("http://sr/somewhere?a=1&token=test-token", { redirect: "manual" });
+    const res = await exports.default.fetch("http://sr/somewhere?a=1&token=test-token", { redirect: "manual" });
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toBe("http://sr/somewhere?a=1");
     const cookie = res.headers.get("Set-Cookie") ?? "";
@@ -31,25 +31,25 @@ describe("auth", () => {
   });
 
   it("accepts the cookie", async () => {
-    const res = await SELF.fetch("http://sr/anything", { headers: { Cookie: "sr=test-token" } });
+    const res = await exports.default.fetch("http://sr/anything", { headers: { Cookie: "sr=test-token" } });
     expect(res.status).toBe(404);
   });
 
   it("wrong ?token= gets 401 and sets no cookie", async () => {
-    const res = await SELF.fetch("http://sr/somewhere?token=wrong", { redirect: "manual" });
+    const res = await exports.default.fetch("http://sr/somewhere?token=wrong", { redirect: "manual" });
     expect(res.status).toBe(401);
     expect(res.headers.get("Set-Cookie")).toBeNull();
   });
 
   it("public path matching is exact", async () => {
-    expect((await SELF.fetch("http://sr/healthx")).status).toBe(401);      // /health must not prefix-match
-    expect((await SELF.fetch("http://sr/static/nonexistent")).status).not.toBe(401); // /static/* bypasses auth
+    expect((await exports.default.fetch("http://sr/healthx")).status).toBe(401);      // /health must not prefix-match
+    expect((await exports.default.fetch("http://sr/static/nonexistent")).status).not.toBe(401); // /static/* bypasses auth
   });
 });
 
 export const AUTH = { headers: { Authorization: "Bearer test-token" } };
 const POST = (path: string, body: unknown) =>
-  SELF.fetch(`http://sr${path}`, {
+  exports.default.fetch(`http://sr${path}`, {
     method: "POST",
     headers: { ...AUTH.headers, "Content-Type": "application/json" },
     body: JSON.stringify(body)
@@ -71,7 +71,7 @@ async function seedReviewPrompt(question = "rev-q") {
 describe("review", () => {
   it("GET / embeds a session containing a due card", async () => {
     const pid = await seedReviewPrompt("embedded-question");
-    const res = await SELF.fetch("http://sr/", AUTH);
+    const res = await exports.default.fetch("http://sr/", AUTH);
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain('id="session"');
@@ -137,7 +137,7 @@ describe("capture", () => {
 
   it("lists today's captures", async () => {
     await POST("/api/capture", { text: "today-item" });
-    const res = await SELF.fetch("http://sr/api/captures/today", AUTH);
+    const res = await exports.default.fetch("http://sr/api/captures/today", AUTH);
     const { items } = await res.json() as { items: { text: string }[] };
     expect(items.some(i => i.text === "today-item")).toBe(true);
   });
@@ -145,14 +145,14 @@ describe("capture", () => {
   it("source autocomplete matches by substring", async () => {
     await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Thinking in Bets', NULL, '{}', ?)")
       .bind(newId(), nowIso()).run();
-    const res = await SELF.fetch("http://sr/api/sources?q=bets", AUTH);
+    const res = await exports.default.fetch("http://sr/api/sources?q=bets", AUTH);
     const { items } = await res.json() as { items: { name: string }[] };
     expect(items.some(i => i.name === "Thinking in Bets")).toBe(true);
   });
 
   it("serves capture page and sw.js (sw without auth)", async () => {
-    expect((await SELF.fetch("http://sr/capture", AUTH)).status).toBe(200);
-    const sw = await SELF.fetch("http://sr/sw.js");
+    expect((await exports.default.fetch("http://sr/capture", AUTH)).status).toBe(200);
+    const sw = await exports.default.fetch("http://sr/sw.js");
     expect(sw.status).toBe(200);
     expect(sw.headers.get("Content-Type") ?? "").toContain("javascript");
   });
@@ -168,7 +168,7 @@ describe("inbox and refine", () => {
     const cid = await seedCapture("inbox-cap");
     const pid = await seedReviewPrompt("flagged-question");
     await POST("/api/grade", { prompt_id: pid, action: "flag", note: "unclear" });
-    const html = await (await SELF.fetch("http://sr/inbox", AUTH)).text();
+    const html = await (await exports.default.fetch("http://sr/inbox", AUTH)).text();
     expect(html).toContain("inbox-cap");
     expect(html).toContain(`/refine/${cid}`);
     expect(html).toContain("flagged-question");
@@ -206,7 +206,7 @@ describe("inbox and refine", () => {
 
   it("capture delete removes pending capture", async () => {
     const cid = await seedCapture("to-delete");
-    const res = await SELF.fetch(`http://sr/api/capture/${cid}/delete`, { method: "POST", ...AUTH });
+    const res = await exports.default.fetch(`http://sr/api/capture/${cid}/delete`, { method: "POST", ...AUTH });
     expect(res.status).toBe(200);
     const row = await env.DB.prepare("SELECT id FROM captures WHERE id = ?").bind(cid).first();
     expect(row).toBeNull();
@@ -252,20 +252,20 @@ describe("browse, prompt edit, settings", () => {
     const { id } = await res.json() as { id: string };
     const row = await env.DB.prepare("SELECT reps, state FROM prompts WHERE id = ?").bind(id).first();
     expect(row?.reps).toBe(0);
-    const html = await (await SELF.fetch(`http://sr/browse/${sid}`, AUTH)).text();
+    const html = await (await exports.default.fetch(`http://sr/browse/${sid}`, AUTH)).text();
     expect(html).toContain("direct?");
     expect(html).toContain(`/?source=${sid}`);
   });
 
   it("browse index lists sources with counts", async () => {
-    const html = await (await SELF.fetch("http://sr/browse", AUTH)).text();
+    const html = await (await exports.default.fetch("http://sr/browse", AUTH)).text();
     expect(html).toContain("Direct Src");
   });
 
   it("settings round-trip and validation", async () => {
     const ok = await POST("/api/settings", { session_cap: 25, desired_retention: 0.85, email_hour: 8, timezone: "America/New_York" });
     expect(ok.status).toBe(200);
-    const html = await (await SELF.fetch("http://sr/settings", AUTH)).text();
+    const html = await (await exports.default.fetch("http://sr/settings", AUTH)).text();
     expect(html).toContain("25");
     expect((await POST("/api/settings", { session_cap: 0, desired_retention: 0.9, email_hour: 7, timezone: "America/New_York" })).status).toBe(400);
     expect((await POST("/api/settings", { session_cap: 20, desired_retention: 0.5, email_hour: 7, timezone: "America/New_York" })).status).toBe(400);
@@ -275,9 +275,9 @@ describe("browse, prompt edit, settings", () => {
   });
 
   it("prompt/new rejects malformed or unknown source ids", async () => {
-    const evil = await SELF.fetch(`http://sr/prompt/new?source=${encodeURIComponent('x"><script>1</script>')}`, AUTH);
+    const evil = await exports.default.fetch(`http://sr/prompt/new?source=${encodeURIComponent('x"><script>1</script>')}`, AUTH);
     expect(evil.status).toBe(404);
-    const unknown = await SELF.fetch("http://sr/prompt/new?source=zzzzzzzzzz", AUTH);
+    const unknown = await exports.default.fetch("http://sr/prompt/new?source=zzzzzzzzzz", AUTH);
     expect(unknown.status).toBe(404);
   });
 
@@ -285,7 +285,7 @@ describe("browse, prompt edit, settings", () => {
     const sid = newId();
     await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Sketchy', 'javascript:alert(1)', '{}', ?)")
       .bind(sid, nowIso()).run();
-    const html = await (await SELF.fetch(`http://sr/browse/${sid}`, AUTH)).text();
+    const html = await (await exports.default.fetch(`http://sr/browse/${sid}`, AUTH)).text();
     expect(html).not.toContain('href="javascript:');
   });
 

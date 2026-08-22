@@ -1,4 +1,5 @@
-import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
+import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { composeReminder, decideReminder, sessionReady, type CadenceState } from "../src/email";
 import { getSetting, setSetting } from "../src/db";
