@@ -14,6 +14,12 @@ I've also looked at [Orbit](https://github.com/andymatuschak/orbit) (I'm a big f
 
 At a high level, this project consists of a few companion pieces of software that make memory augmentation an ambient layer over whatever you’re reading or thinking about. The software helps you capture ideas worth remembering from their source context with minimal interruption, refine those raw captures into effective retrieval prompts, and intelligently resurface them for review at the right time (maximizing long-term retention while minimizing practice time).
 
+# Design principles
+
+- Capturing context should be nearly effortless. 
+- Refinement of captured context into retrieval prompts should be meaningfully effortful.
+
+
 ## Deploy (once)
 
 ```bash
