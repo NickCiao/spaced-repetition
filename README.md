@@ -71,3 +71,15 @@ The export zip includes `retired.jsonl` (retired prompts' content archive). To u
 ## Backup
 
 Manual by design: Settings → "Download everything" (or the curl above), whenever you think of it. D1 Time Travel adds an in-vendor safety net — point-in-time restore for 30 days on Workers Paid, 7 days on Free.
+
+## Key References
+https://augmentingcognition.com/ltm.html
+
+https://gwern.net/spaced-repetition
+
+https://withorbit.com/
+
+https://github.com/andymatuschak/orbit
+
+
+
