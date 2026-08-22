@@ -1,0 +1,4 @@
+SR_TOKEN=devtoken
+RESEND_API_KEY=re_your_key   # or `unused` to skip real sends in dev
+EMAIL_TO=you@example.com     # must match your Resend account email when using onboarding@resend.dev
+BASE_URL=http://localhost:8787

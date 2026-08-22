@@ -1,16 +1,31 @@
 {
-  "name": "spaced-repetition",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-09-06",
-  "assets": { "directory": "./public", "binding": "ASSETS" },
-  "d1_databases": [
-    { "binding": "DB", "database_name": "sr", "database_id": "REPLACE-AT-DEPLOY", "migrations_dir": "migrations" }
-  ],
-  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "sr-assets" }],
-  "triggers": { "crons": ["0 * * * *"] },
-  "vars": {
-    "BASE_URL": "http://localhost:8787",
-    "EMAIL_TO": "you@example.com",
-    "EMAIL_FROM": "sr@resend.dev"
-  }
+	"name": "spaced-repetition",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-09-06",
+	"assets": {
+		"directory": "./public",
+		"binding": "ASSETS"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "sr",
+			"database_id": "f883faed-a017-49b8-921b-2e2f4caba667",
+			"migrations_dir": "migrations"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "BUCKET",
+			"bucket_name": "sr-assets"
+		}
+	],
+	"triggers": {
+		"crons": [
+			"0 * * * *"
+		]
+	},
+	"vars": {
+		"EMAIL_FROM": "onboarding@resend.dev"
+	}
 }

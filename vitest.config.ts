@@ -12,7 +12,9 @@ export default defineConfig(async () => {
           bindings: {
             TEST_MIGRATIONS: migrations,
             SR_TOKEN: "test-token",
-            RESEND_API_KEY: "test-key"
+            RESEND_API_KEY: "test-key",
+            BASE_URL: "http://localhost:8787",
+            EMAIL_TO: "you@example.com"
           }
         }
       })

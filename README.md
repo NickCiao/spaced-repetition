@@ -25,16 +25,25 @@ At a high level, this project is one Cloudflare Worker with a few companion surf
 ```bash
 npm install
 npx wrangler login
+
+# Create backing stores. Enable R2 in the dashboard first if bucket create fails with code 10042.
 npx wrangler d1 create sr             # paste database_id into wrangler.jsonc
 npx wrangler r2 bucket create sr-assets
+# If Wrangler offers to edit wrangler.jsonc after either command, decline — bindings are already configured.
+
 npx wrangler d1 migrations apply sr --remote
+
 openssl rand -hex 32 | npx wrangler secret put SR_TOKEN
 npx wrangler secret put RESEND_API_KEY   # from resend.com (free tier)
-# edit wrangler.jsonc vars: BASE_URL (your workers.dev URL), EMAIL_TO, EMAIL_FROM
-#   EMAIL_FROM must be a verified domain sender, or onboarding@resend.dev — Resend's
-#   shared domain only permits sending from that one address.
+npx wrangler secret put EMAIL_TO
+npx wrangler secret put BASE_URL         # https://<your-worker>.workers.dev (printed at end of deploy)
+
 npx wrangler deploy
+curl https://<your-worker>/health        # {"ok":true}
 ```
+
+`EMAIL_TO` and `BASE_URL` are secrets only (not in `wrangler.jsonc`), so redeploying won't overwrite them.
+`EMAIL_FROM` defaults to `onboarding@resend.dev` in `wrangler.jsonc` — Resend's test sender, which only delivers to the address on your Resend account. For production, verify your own domain in Resend and `npx wrangler secret put EMAIL_FROM`.
 
 Open `https://<your-worker>/?token=<SR_TOKEN>` once per browser; the cookie does the rest.
 On the phone: open `/capture`, then Share → Add to Home Screen.
@@ -42,9 +51,9 @@ On the phone: open `/capture`, then Share → Add to Home Screen.
 ## Local dev
 
 ```bash
+npm install
 npx wrangler d1 migrations apply sr --local
-echo 'SR_TOKEN=devtoken' > .dev.vars
-echo 'RESEND_API_KEY=unused' >> .dev.vars
+cp .dev.vars.example .dev.vars   # RESEND_API_KEY and EMAIL_TO required for real sends; SR_TOKEN and BASE_URL are preset
 npm run dev      # http://localhost:8787/?token=devtoken
 npm test
 ```
@@ -55,7 +64,7 @@ Local state (D1, R2, the asset cache) lives under `.wrangler/state/` and survive
 curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
 ```
 
-The server log prints the decision, e.g. `{"reminder":"fuller-session-soon","ready":false,"due":2,"send":false}`. An email is only attempted at the hour set in Settings, and only reaches anyone with a real `RESEND_API_KEY` plus `EMAIL_TO`/`EMAIL_FROM` — put those in `.dev.vars` if you want to watch the actual message arrive.
+The server log prints the decision, e.g. `{"reminder":"fuller-session-soon","ready":false,"due":2,"send":false}`. An email is only attempted at the hour set in Settings, and only sends with a real `RESEND_API_KEY` plus `EMAIL_TO` (and `EMAIL_FROM` from `wrangler.jsonc` unless overridden in `.dev.vars`).
 
 ## iOS share-sheet Shortcut
 
