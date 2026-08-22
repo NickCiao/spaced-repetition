@@ -6,13 +6,13 @@ After searching high and low, there doesn't appear to be any existing flashcard 
 
 1. Make it low-effort to capture the raw context around something worth remembering (e.g. when reading physical/digital books, pdfs, webpages, conversations with an AI, podcasts, etc). 
 2. Refining that raw context into a pedagogically correct memory prompt (e.g. a flashcard).
-3. Notifying you on when you should **review** your memory prompts (and which ones) based on spaced-repetition schedule.
+3. Notifying you when a review session is actually worth doing (basically, when the backlog or forgetting cost makes a review session worthwhile).
 
 I tried [Mochi](https://mochi.cards/) & [Anki](https://apps.ankiweb.net/) (Mochi is Anki with better UI), but they both assume that you're primarily sitting down with the app open, with your focus entirely centered on creating flash cards or reviewing flash cards. These apps also don't notify you on a spaced-repetition schedule.
 
-I've also looked at [Orbit](https://github.com/andymatuschak/orbit) (I'm a big fan of AndyM's work), but it's primarily a research project. It also primarily targets writers, giving them a tool to create content in the style of [Quantum Country](https://quantum.country/). Orbit does introduce two really useful abstractions that we borrow for this project: a Task (e.g. a thing that you want to remember), and a Scheduler (which decides when each Task is due for review, and when to notify you).
+I've also looked at [Orbit](https://github.com/andymatuschak/orbit) (I'm a big fan of AndyM's work). Orbit targets writers building mnemonic-medium texts (like [Quantum Country](https://quantum.country/)). We borrow its session-worthiness scheduling idea, adapted with FSRS instead of a fixed decay heuristic. Orbit's Task maps to our **prompt**; its Scheduler decides when each prompt is due for review and when to notify you.
 
-At a high level, this project consists of a few companion pieces of software that make memory augmentation an ambient layer over whatever you’re reading or thinking about. The software helps you capture ideas worth remembering from their source context with minimal interruption, refine those raw captures into effective retrieval prompts, and intelligently resurface them for review at the right time (maximizing long-term retention while minimizing practice time).
+At a high level, this project is one Cloudflare Worker with a few companion surfaces that make memory augmentation an ambient layer over whatever you’re reading or thinking about. The software helps you capture ideas worth remembering from their source context with minimal interruption, refine those raw captures into effective retrieval prompts, and intelligently resurface them for review at the right time so that this becomes a practice that you can sustain for years.
 
 # Design principles
 
