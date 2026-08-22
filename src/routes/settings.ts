@@ -23,6 +23,17 @@ export async function settingsPage(env: Env): Promise<Response> {
   <div class="btnrow"><button id="dry">Dry-run</button><button id="apply" class="primary">Apply</button></div>
   <pre id="importout"></pre>
 </form>
+
+<h2>Import from Anki / Mochi</h2>
+<p>Additive import — creates new prompts only; does not edit or retire existing cards.</p>
+<form onsubmit="return doForeignImport(event)">
+  <label>File (.txt plain-text export, or Mochi .mochi)</label>
+  <input type="file" id="foreignfile" accept=".txt,.mochi,.zip">
+  <label>Source name (for headerless Anki cards export)</label>
+  <input type="text" id="foreignsource" value="Anki import">
+  <div class="btnrow"><button id="foreigndry">Dry-run</button><button id="foreignapply" class="primary">Apply</button></div>
+  <pre id="foreignout"></pre>
+</form>
 <script>
 async function saveSettings(e) {
   e.preventDefault();
@@ -35,6 +46,17 @@ async function saveSettings(e) {
   const res = await fetch("/api/settings", { method: "POST",
     headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   document.getElementById("flash").textContent = res.ok ? "Saved ✓" : (await res.json()).error;
+  return false;
+}
+
+async function doForeignImport(e) {
+  e.preventDefault();
+  const f = document.getElementById("foreignfile").files[0];
+  if (!f) return false;
+  const apply = e.submitter && e.submitter.id === "foreignapply" ? 1 : 0;
+  const source = encodeURIComponent(document.getElementById("foreignsource").value.trim() || "Anki import");
+  const res = await fetch("/import/foreign?apply=" + apply + "&source=" + source, { method: "POST", body: f });
+  document.getElementById("foreignout").textContent = JSON.stringify(await res.json(), null, 2);
   return false;
 }
 async function doImport(e) {

@@ -2,6 +2,9 @@ import { strFromU8 } from "fflate";
 import type { Env } from "./env.d";
 import { newId, type PromptRow, type SourceRow } from "./db";
 import { FormatError, parseSourceFile, type ParsedFile, type ParsedPrompt } from "./format";
+import {
+  type ForeignImport, type ForeignPrompt, rewriteMediaRefs
+} from "./interop";
 import { applyGrade, newCardFields } from "./scheduler";
 import { ALLOWED_TYPES } from "./routes/assets";
 
@@ -139,6 +142,116 @@ async function wipeAll(env: Env): Promise<void> {
   for (const table of ["events", "prompts", "sources", "captures", "assets"]) {
     try { await env.DB.prepare(`DELETE FROM ${table}`).run(); } catch { /* best-effort */ }
   }
+}
+
+
+export type ForeignImportResult = {
+  created: number;
+  skipped: number;
+  sources: { name: string; created: number; skipped: number }[];
+  warnings: string[];
+};
+
+async function storeAsset(env: Env, bytes: Uint8Array, type: string, ts: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const id = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+  const existing = await env.DB.prepare("SELECT id FROM assets WHERE id = ?").bind(id).first();
+  if (!existing) {
+    await env.BUCKET.put(id, bytes, { httpMetadata: { contentType: type } });
+    await env.DB.prepare(
+      "INSERT INTO assets (id, content_type, bytes, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING"
+    ).bind(id, type, bytes.byteLength, ts).run();
+  }
+  return id;
+}
+
+function promptKey(p: ForeignPrompt): string {
+  return `${p.kind}\0${p.question}\0${p.answer}`;
+}
+
+export async function applyForeignImport(
+  env: Env, data: ForeignImport, now: Date, apply: boolean
+): Promise<ForeignImportResult> {
+  const ts = now.toISOString();
+  const warnings = [...data.warnings];
+  const idByFile = new Map<string, string>();
+
+  if (apply) {
+    for (const [filename, att] of Object.entries(data.attachments)) {
+      if (!ALLOWED_TYPES.has(att.type)) {
+        warnings.push(`skipped unsupported attachment "${filename}"`);
+        continue;
+      }
+      try {
+        idByFile.set(filename, await storeAsset(env, att.bytes, att.type, ts));
+      } catch {
+        warnings.push(`failed to store attachment "${filename}"`);
+      }
+    }
+  }
+
+  let created = 0, skipped = 0;
+  const sources: ForeignImportResult["sources"] = [];
+
+  for (const deck of data.decks) {
+    let deckCreated = 0, deckSkipped = 0;
+    let source = await env.DB.prepare("SELECT * FROM sources WHERE name = ?").bind(deck.name).first<SourceRow>();
+
+    const existingKeys = new Set<string>();
+    if (source) {
+      const rows = (await env.DB.prepare(
+        "SELECT kind, question, answer FROM prompts WHERE source_id = ?"
+      ).bind(source.id).all<{ kind: string; question: string; answer: string }>()).results;
+      for (const r of rows) existingKeys.add(`${r.kind}\0${r.question}\0${r.answer}`);
+    }
+
+    let pos = source
+      ? (await env.DB.prepare("SELECT MAX(position) AS m FROM prompts WHERE source_id = ?")
+        .bind(source.id).first<{ m: number }>())?.m ?? -1
+      : -1;
+
+    for (const p of deck.prompts) {
+      const question = rewriteMediaRefs(p.question, idByFile);
+      const answer = rewriteMediaRefs(p.answer, idByFile);
+      const prompt: ForeignPrompt = { kind: p.kind, question, answer };
+      const key = promptKey(prompt);
+
+      if (existingKeys.has(key)) {
+        skipped++;
+        deckSkipped++;
+        continue;
+      }
+
+      if (!apply) {
+        created++;
+        deckCreated++;
+        continue;
+      }
+
+      if (!source) {
+        const sid = newId();
+        await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, ?, ?, ?, ?)")
+          .bind(sid, deck.name, null, "{}", ts).run();
+        source = { id: sid, name: deck.name, url: null, meta: "{}", created_at: ts };
+      }
+
+      const f = newCardFields(now);
+      await env.DB.prepare(
+        `INSERT INTO prompts (id, source_id, kind, question, answer, position, created_at, updated_at,
+          due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(newId(), source.id, prompt.kind, prompt.question, prompt.answer, ++pos, ts, ts,
+        f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
+        f.reps, f.lapses, f.state, f.last_review).run();
+      existingKeys.add(key);
+      created++;
+      deckCreated++;
+    }
+
+    if (deckCreated || deckSkipped) sources.push({ name: deck.name, created: deckCreated, skipped: deckSkipped });
+  }
+
+  return { created, skipped, sources, warnings };
 }
 
 export async function restoreFromZip(

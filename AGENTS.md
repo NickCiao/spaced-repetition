@@ -5,7 +5,8 @@ Single-user spaced-repetition app: capture → refine → review → export/impo
 **Docs** (table of contents):
 - Design docs → `docs/design/YYYY-MM-DD-topic.md` — authoritative
 - Implementation docs → `docs/impl/` — historical how-to; prefer design doc when they disagree
-- Project Intent + Deploy/runbook → `README.md`
+- Project Intent + core workflows + operator runbook → `README.md` — update it only when those change.
+- When product behaviour changes, update the relevant design docs (or write a new one).
 - Keep README and relevant design docs consistent when product behaviour changes.
 
 **Stack:** Cloudflare Worker (TypeScript) + D1 + R2. Server-rendered HTML + vanilla JS. No web/client framework.
