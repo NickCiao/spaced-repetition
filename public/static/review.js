@@ -7,24 +7,38 @@
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-  // nextDueCount is only meaningful alongside a real nextDue date; when nextDue is
-  // null the count is always 0, so the suffix naturally disappears too.
-  const dueSuffix = () => session.nextDueCount ? ` (${session.nextDueCount} prompt${session.nextDueCount === 1 ? "" : "s"})` : "";
+  // The schedule the page loaded with (session.nextDue / nextDueCount) goes stale as
+  // soon as a grade lands, so the end screen also folds in the dues this session assigned.
+  const gradedDues = [];
+  const fmt = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+
+  // Earliest upcoming review and how many prompts share that day: prompts graded here
+  // that land on it, plus the page-load count if session.nextDue falls on the same day.
+  function nextReview() {
+    const candidates = [session.nextDue, ...gradedDues].filter(Boolean);
+    if (!candidates.length) return null;
+    const next = candidates.reduce((a, b) => (new Date(b) < new Date(a) ? b : a));
+    const count = gradedDues.filter(d => sameDay(d, next)).length
+      + (session.nextDue && sameDay(session.nextDue, next) ? session.nextDueCount : 0);
+    return { next, count };
+  }
+  const describe = (n) => fmt(n.next) + (n.count ? ` (${n.count} prompt${n.count === 1 ? "" : "s"})` : "");
 
   function finish() {
     let html = '<div class="done">';
     if (session.dueRemaining > 0) {
       html += `<p>${session.dueRemaining} more due — keep going?</p><p><a class="btn" href="/">Continue</a></p>`;
     } else {
-      const next = session.nextDue ? new Date(session.nextDue).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }) : "—";
-      html += `<p>Done — next review ${next}${dueSuffix()}.</p><p><a class="btn" href="/?ahead=1">Review ahead</a></p>`;
+      const n = nextReview();
+      html += `<p>Done — next review ${n ? describe(n) : "—"}.</p><p><a class="btn" href="/?ahead=1">Review ahead</a></p>`;
     }
     el.innerHTML = html + "</div>";
   }
 
   function nothingDue() {
-    const next = session.nextDue ? new Date(session.nextDue).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }) : "nothing scheduled";
-    el.innerHTML = `<div class="done"><p>Nothing due. Next: ${next}${dueSuffix()}.</p>
+    const n = nextReview();
+    el.innerHTML = `<div class="done"><p>Nothing due. Next: ${n ? describe(n) : "nothing scheduled"}.</p>
       <p><a class="btn" href="/?ahead=1">Review ahead</a></p></div>`;
   }
 
@@ -36,6 +50,9 @@
         body: JSON.stringify({ prompt_id: card.id, action, note })
       });
       if (!res.ok) throw new Error(String(res.status));
+      // Only real grades move a card; skip/flag leave it due and retire removes it.
+      const { due } = await res.json().catch(() => ({}));
+      if ((action === "remembered" || action === "forgot") && typeof due === "string") gradedDues.push(due);
     } catch {
       alert("Couldn't save that grade — check your connection and try again.");
       return; // stay on this card; nothing advanced, nothing lost silently
