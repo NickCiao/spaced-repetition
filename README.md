@@ -43,6 +43,14 @@ npm run dev      # http://localhost:8787/?token=devtoken
 npm test
 ```
 
+Local state (D1, R2, the asset cache) lives under `.wrangler/state/` and survives restarts; delete that directory to start clean. The dev server also exposes the reminder cron, so you can fire it by hand:
+
+```bash
+curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
+```
+
+The server log prints the decision, e.g. `{"reminder":"fuller-session-soon","ready":false,"due":2,"send":false}`. An email is only attempted at the hour set in Settings, and only reaches anyone with a real `RESEND_API_KEY` plus `EMAIL_TO`/`EMAIL_FROM` — put those in `.dev.vars` if you want to watch the actual message arrive.
+
 ## iOS share-sheet Shortcut
 
 1. Shortcuts → + → name "Capture".

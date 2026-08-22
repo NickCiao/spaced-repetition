@@ -143,6 +143,7 @@ export async function runReminderCron(env: Env, now: Date): Promise<void> {
     now, tz: s.timezone, hour: s.email_hour, ready: session.ready,
     cadence, lastReviewAt: lastReview?.t ?? null
   });
+  console.log(JSON.stringify({ reminder: session.reason, ready: session.ready, due: session.dueCount, send: d.send }));
   if (d.send) {
     const { subject, html } = composeReminder(session.dueCount, env.BASE_URL);
     await sendReminder(env, subject, html);
