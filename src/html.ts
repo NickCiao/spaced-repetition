@@ -10,6 +10,8 @@ export function page(title: string, body: string, opts: { extraHead?: string; sc
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="stylesheet" href="/static/app.css">
 <link rel="stylesheet" href="/static/katex/katex.min.css">
 ${opts.extraHead ?? ""}

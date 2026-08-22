@@ -1,6 +1,6 @@
 import type { Env } from "./env.d";
 
-const PUBLIC = [/^\/health$/, /^\/sw\.js$/, /^\/static\//];
+const PUBLIC = [/^\/health$/, /^\/sw\.js$/, /^\/favicon\.ico$/, /^\/static\//];
 
 export function requireAuth(request: Request, env: Env): Response | null {
   const url = new URL(request.url);
