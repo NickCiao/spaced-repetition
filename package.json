@@ -5,6 +5,11 @@
   "scripts": {
     "dev": "wrangler dev --test-scheduled",
     "deploy": "wrangler deploy",
+    "deploy:safe": "npm test && wrangler deploy",
+    "migrate:local": "wrangler d1 migrations apply sr --local",
+    "migrate:remote": "wrangler d1 migrations apply sr --remote",
+    "db:wipe:local": "bash scripts/db-wipe-local.sh",
+    "db:wipe:remote": "bash scripts/db-wipe-remote.sh",
     "test": "vitest run",
     "types": "wrangler types"
   },

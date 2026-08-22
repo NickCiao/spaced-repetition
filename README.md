@@ -20,7 +20,20 @@ At a high level, this project is one Cloudflare Worker with a few companion surf
 - Refinement of captured context into retrieval prompts should be meaningfully effortful.
 
 
-## Deploy (once)
+## Ops
+
+| Command | What |
+|---------|------|
+| `npm run dev` | Local dev server (`http://localhost:8787/?token=devtoken`) |
+| `npm test` | Test suite |
+| `npm run migrate:local` | Apply D1 migrations locally |
+| `npm run migrate:remote` | Apply D1 migrations to production |
+| `npm run deploy` | Deploy worker code (secrets unchanged) |
+| `npm run deploy:safe` | `npm test` then deploy |
+| `npm run db:wipe:local` | Wipe local D1/R2 state and re-migrate |
+| `CONFIRM=yes npm run db:wipe:remote` | Wipe production D1 + R2 (see below). Optional: `WIPE_SETTINGS=yes` clears settings. |
+
+## First-time production deploy
 
 ```bash
 npm install
@@ -31,14 +44,14 @@ npx wrangler d1 create sr             # paste database_id into wrangler.jsonc
 npx wrangler r2 bucket create sr-assets
 # If Wrangler offers to edit wrangler.jsonc after either command, decline — bindings are already configured.
 
-npx wrangler d1 migrations apply sr --remote
+npm run migrate:remote
 
 openssl rand -hex 32 | npx wrangler secret put SR_TOKEN
 npx wrangler secret put RESEND_API_KEY   # from resend.com (free tier)
 npx wrangler secret put EMAIL_TO
 npx wrangler secret put BASE_URL         # https://<your-worker>.workers.dev (printed at end of deploy)
 
-npx wrangler deploy
+npm run deploy
 curl https://<your-worker>/health        # {"ok":true}
 ```
 
@@ -52,13 +65,13 @@ On the phone: open `/capture`, then Share → Add to Home Screen.
 
 ```bash
 npm install
-npx wrangler d1 migrations apply sr --local
 cp .dev.vars.example .dev.vars   # RESEND_API_KEY and EMAIL_TO required for real sends; SR_TOKEN and BASE_URL are preset
-npm run dev      # http://localhost:8787/?token=devtoken
+npm run migrate:local
+npm run dev
 npm test
 ```
 
-Local state (D1, R2, the asset cache) lives under `.wrangler/state/` and survives restarts; delete that directory to start clean. The dev server also exposes the reminder cron, so you can fire it by hand:
+`npm run db:wipe:local` resets local D1/R2 state. The dev server also exposes the reminder cron:
 
 ```bash
 curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
@@ -68,15 +81,39 @@ The server log prints the decision, e.g. `{"reminder":"fuller-session-soon","rea
 
 ## iOS share-sheet Shortcut
 
-1. Shortcuts → + → name "Capture".
-2. Add action **Ask for Input** (Text, prompt "Note (optional)", allow empty).
-3. Add action **Get Contents of URL**:
+The share-sheet shortcut is the fast path for capturing a Safari highlight without opening the app. Setup is fiddly because Shortcuts hides variable wiring inside nested pickers — follow the steps below rather than trying to cram everything into one **Get Contents of URL** action.
+
+**Prereqs:** your worker URL and `SR_TOKEN`. Sanity-check before opening Shortcuts:
+
+```bash
+curl -s -X POST "https://<your-worker>/api/capture" \
+  -H "Authorization: Bearer <SR_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"shortcut test"}'
+# → {"ok":true,"id":"..."}
+```
+
+**Build the shortcut** (Shortcuts → + → name "Capture"):
+
+1. **Ask for Input** — Text, prompt `Note (optional)`, allow empty.
+2. **Get Text from Input** — input: **Shortcut Input** (the shared text or page).
+3. **If** **Text** (step 2) **has any value** → **Otherwise**:
+   - In Otherwise: **Ask for Input** — Text, prompt `What's worth keeping?`
+   - Use **Provided Input** from this ask as capture text when testing from the Shortcuts app (Shortcut Input is empty when you tap-run).
+4. **Get URLs from Input** — input: **Shortcut Input**.
+5. **Get Item from List** — list: **URLs** (step 4), first item only.
+6. **Get Name from Input** — input: **Shortcut Input** (page title when sharing a Safari web page; empty for plain text — fine).
+7. **Get Contents of URL**:
    - URL: `https://<your-worker>/api/capture`
-   - Method POST, Header `Authorization: Bearer <SR_TOKEN>`,
-   - Request Body JSON: `text` = Shortcut Input (as text), `note` = Provided Input,
-     `url` = Shortcut Input → URLs (first), `title` = Shortcut Input → name if available.
-4. In the shortcut's settings, enable **Show in Share Sheet**, accept Text / Safari web pages.
-5. Test: select text in Safari → Share → Capture. Offline it fails visibly — use the home-screen Capture app instead; it queues.
+   - Method: POST
+   - Header: `Authorization` → `Bearer <SR_TOKEN>` (literal token, include the `Bearer ` prefix)
+   - Request Body: **JSON** with keys:
+     - `text` → capture text from step 3 (**Text** from step 2, or **Provided Input** from the fallback ask)
+     - `note` → **Provided Input** from step 1
+     - `url` → **Item** from step 5
+     - `title` → **Name** from step 6
+8. (Optional) **Show Result** — confirms `{"ok":true,...}` on success.
+
 
 ## Refactor loop (export → edit → import)
 
