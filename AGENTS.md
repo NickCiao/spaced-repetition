@@ -1,7 +1,13 @@
 # AGENTS.md
 
 Single-user spaced-repetition app: capture → refine → review → export/import refactor.
-Product intent: `docs/design/2026-08-20-spaced-repetition-design.md`. Deploy/runbook: `README.md`.
+
+**Docs** (table of contents):
+- Design docs → `docs/design/YYYY-MM-DD-topic.md` — authoritative
+- Implementation docs → `docs/impl/` — historical how-to; prefer design doc when they disagree
+- Project Intent + Deploy/runbook → `README.md`
+- Don't change product intent in code without updating design or asking.
+- Make sure that docs and README.md are consistent after every code change.
 
 **Stack:** Cloudflare Worker (TypeScript) + D1 + R2. Server-rendered HTML + vanilla JS. No web/client framework.
 
