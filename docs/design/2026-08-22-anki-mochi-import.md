@@ -42,7 +42,7 @@ Referenced `![alt](@media/file)` links in Mochi content are uploaded to R2 (cont
 
 ## UI
 
-Settings → **Import from Anki / Mochi** — file upload, optional source name for headerless Anki export, dry-run + apply.
+Settings → **Import** → **Migrate in** mode (not **Restore / refactor**, which is only for `export.zip` from this worker). File upload, optional source name for headerless Anki export (shown only in this mode), dry-run + apply.
 
 ## API
 

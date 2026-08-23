@@ -7,7 +7,7 @@ export async function settingsPage(env: Env): Promise<Response> {
   const body = `
 <nav><a href="/">Review</a> <a href="/capture">Capture</a> <a href="/inbox">Inbox</a> <a href="/browse">Browse</a> <a href="/settings">Settings</a></nav>
 <h1>Settings</h1>
-<form onsubmit="return saveSettings(event)">
+<form id="settings-form">
   <label>Session cap</label><input type="text" id="session_cap" value="${s.session_cap}">
   <label>Desired retention (0.7–0.97)</label><input type="text" id="desired_retention" value="${s.desired_retention}">
   <label>Reminder hour (0–23, local)</label><input type="text" id="email_hour" value="${s.email_hour}">
@@ -15,61 +15,64 @@ export async function settingsPage(env: Env): Promise<Response> {
   <div class="btnrow"><button class="primary">Save</button></div>
   <p class="flash" id="flash"></p>
 </form>
-<h2>Data</h2>
-<p><a href="/export.zip">Download everything</a></p>
-<form method="post" action="/import?apply=0" onsubmit="return doImport(event)">
-  <label>Import zip (dry-run first)</label>
-  <input type="file" id="zipfile" accept=".zip">
-  <div class="btnrow"><button id="dry">Dry-run</button><button id="apply" class="primary">Apply</button></div>
-  <pre id="importout"></pre>
-</form>
 
-<h2>Import from Anki / Mochi</h2>
-<p>Additive import — creates new prompts only; does not edit or retire existing cards.</p>
-<form onsubmit="return doForeignImport(event)">
-  <label>File (.txt plain-text export, or Mochi .mochi)</label>
-  <input type="file" id="foreignfile" accept=".txt,.mochi,.zip">
-  <label>Source name (for headerless Anki cards export)</label>
-  <input type="text" id="foreignsource" value="Anki import">
-  <div class="btnrow"><button id="foreigndry">Dry-run</button><button id="foreignapply" class="primary">Apply</button></div>
-  <pre id="foreignout"></pre>
-</form>
-<script>
-async function saveSettings(e) {
-  e.preventDefault();
-  const body = {
-    session_cap: parseInt(document.getElementById("session_cap").value, 10),
-    desired_retention: parseFloat(document.getElementById("desired_retention").value),
-    email_hour: parseInt(document.getElementById("email_hour").value, 10),
-    timezone: document.getElementById("timezone").value.trim()
-  };
-  const res = await fetch("/api/settings", { method: "POST",
-    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  document.getElementById("flash").textContent = res.ok ? "Saved ✓" : (await res.json()).error;
-  return false;
-}
+<div class="settings-section">
+  <h2>Backup</h2>
+  <p class="source section-lead">Full snapshot for safekeeping, or the first step of the refactor loop (export → edit → import).</p>
+  <div class="card backup-card">
+    <a href="/export.zip" class="backup-export-link">
+      <span>
+        <strong>Export everything</strong>
+        <span class="source">export.zip — prompts, assets, log</span>
+      </span>
+      <span class="backup-export-icon" aria-hidden="true">↓</span>
+    </a>
+  </div>
+</div>
 
-async function doForeignImport(e) {
-  e.preventDefault();
-  const f = document.getElementById("foreignfile").files[0];
-  if (!f) return false;
-  const apply = e.submitter && e.submitter.id === "foreignapply" ? 1 : 0;
-  const source = encodeURIComponent(document.getElementById("foreignsource").value.trim() || "Anki import");
-  const res = await fetch("/import/foreign?apply=" + apply + "&source=" + source, { method: "POST", body: f });
-  document.getElementById("foreignout").textContent = JSON.stringify(await res.json(), null, 2);
-  return false;
-}
-async function doImport(e) {
-  e.preventDefault();
-  const f = document.getElementById("zipfile").files[0];
-  if (!f) return false;
-  const apply = e.submitter && e.submitter.id === "apply" ? 1 : 0;
-  const res = await fetch("/import?apply=" + apply, { method: "POST", body: f });
-  document.getElementById("importout").textContent = JSON.stringify(await res.json(), null, 2);
-  return false;
-}
-</script>`;
-  return page("Settings", body);
+<div class="settings-section">
+  <h2>Import</h2>
+  <p class="source section-lead">What do you want to do?</p>
+  <div class="card import-card">
+    <div class="segmented" role="tablist" aria-label="Import intent">
+      <button type="button" class="segmented-btn active" data-mode="native" role="tab" aria-selected="true">Restore / refactor</button>
+      <button type="button" class="segmented-btn" data-mode="foreign" role="tab" aria-selected="false">Migrate in</button>
+    </div>
+    <p class="import-blurb" id="import-blurb-text">Put back a zip you exported from this app, after editing offline.</p>
+    <form id="import-form">
+      <div class="file-drop">
+        <div class="file-drop-inner">
+          <div class="file-drop-text">
+            <span class="file-drop-name" id="file-name">Select a file to import</span>
+            <span class="file-drop-meta" id="file-meta" hidden></span>
+            <span class="file-drop-hint" id="file-hint">.zip export from this app</span>
+          </div>
+          <label class="file-drop-btn">
+            <input type="file" id="import-file" hidden>
+            Choose file
+          </label>
+        </div>
+      </div>
+      <div class="import-field-slot">
+        <div id="foreign-source-wrap" class="import-field-panel">
+          <label>Source name (headerless Anki export)</label>
+          <input type="text" id="foreignsource" value="Anki import">
+        </div>
+      </div>
+      <p class="import-consequence" id="import-consequence">Can edit, add, and retire existing prompts. Preview first to see exactly what changes.</p>
+      <div class="import-file-warn" id="import-file-warn" hidden>
+        <span id="import-file-warn-text"></span>
+        <button type="button" class="import-switch-btn" id="import-switch-btn"></button>
+      </div>
+      <div class="import-btnstack">
+        <button type="submit" id="import-dry">Preview changes</button>
+        <button type="submit" class="primary" id="import-apply">Apply changes</button>
+      </div>
+      <pre id="importout"></pre>
+    </form>
+  </div>
+</div>`;
+  return page("Settings", body, { script: "/static/settings.js" });
 }
 
 export async function settingsApi(request: Request, env: Env): Promise<Response> {
