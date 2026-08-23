@@ -1,7 +1,7 @@
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { composeReminder, decideReminder, sessionReady, type CadenceState } from "../src/email";
+import { composeReminder, decideReminder, reminderReasonText, sessionReady, type CadenceState } from "../src/email";
 import { getSetting, setSetting } from "../src/db";
 import type { SchedFields } from "../src/scheduler";
 import worker from "../src/index";
@@ -179,12 +179,20 @@ describe("decideReminder (pure)", () => {
     expect(d.cadence.unanswered).toBe(1);
   });
 
-  it("compose has no streaks and no token", () => {
-    const { subject, html } = composeReminder(6, "https://sr.example");
-    expect(subject).toBe("Reminder: 6 prompts due · ~2 min");
+  it("compose has no streaks, no token, and reflects the session reason", () => {
+    const { subject, html } = composeReminder(6, "https://sr.example", "forgetting-cost");
+    expect(subject).toBe("6 prompts · ~2 min");
     expect(html).toContain("https://sr.example/");
+    expect(html).toContain("starting to slip");
     expect(html.toLowerCase()).not.toContain("streak");
     expect(html).not.toContain("token=");
+  });
+
+  it("maps each ready reason to supporting copy", () => {
+    expect(reminderReasonText("full-session")).toContain("full session is ready");
+    expect(reminderReasonText("waited-too-long")).toContain("waited over a week");
+    expect(reminderReasonText("forgetting-cost")).toContain("starting to slip");
+    expect(reminderReasonText("no-better-session-soon")).toContain("Nothing bigger is coming");
   });
 });
 
@@ -252,7 +260,7 @@ describe("scheduled handler", () => {
       await runCron(now);
       expect(sent).toHaveLength(1);
       expect(sent[0].url).toBe("https://api.resend.com/emails");
-      expect(sent[0].body).toContain("Reminder: 1 prompt due");
+      expect(sent[0].body).toContain("1 prompt · ~1 min");
       const cadence = JSON.parse((await getSetting(env.DB, "cadence"))!) as CadenceState;
       expect(cadence.unanswered).toBe(1);
       expect(cadence.last_sent).toBe(t.toISOString());

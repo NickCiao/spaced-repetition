@@ -1,6 +1,7 @@
 import type { Env } from "./env.d";
 import { getSetting, getSettings, setSetting } from "./db";
 import { endOfLocalDay, localDate, localHour } from "./clock";
+import { escapeHtml } from "./html";
 import { retrievability, type SchedFields } from "./scheduler";
 
 export type CadenceState = { unanswered: number; mode: "daily" | "weekly"; last_sent: string | null };
@@ -16,9 +17,28 @@ export const FORGETTING_COST_THRESHOLD = 1;
 export const LOOKAHEAD_DAYS = 7; // today plus the six days after it
 export const MAX_WAIT_DAYS = 7;
 
+export type SessionReadyReason = "full-session" | "waited-too-long" | "forgetting-cost" | "no-better-session-soon";
+
 export type SessionDecision =
-  | { ready: true; reason: "full-session" | "waited-too-long" | "forgetting-cost" | "no-better-session-soon"; dueCount: number }
+  | { ready: true; reason: SessionReadyReason; dueCount: number }
   | { ready: false; reason: "nothing-due" | "fuller-session-soon"; dueCount: number };
+
+// Nocturne tokens inlined for email clients that ignore linked stylesheets.
+const NOCTURNE = {
+  bg: "#161826",
+  surface: "#232532",
+  text: "#e9e9ed",
+  accent: "#9184d9",
+  muted: "#9397ab",
+  divider: "rgba(233, 237, 237, 0.16)"
+} as const;
+
+const REMINDER_REASON_TEXT: Record<SessionReadyReason, string> = {
+  "full-session": "A full session is ready — a few quiet minutes to reinforce the details you wanted to keep.",
+  "waited-too-long": "A few of these have waited over a week. Worth a quick pass before they fade.",
+  "forgetting-cost": "Some of these are starting to slip — now is the cheapest time to catch them.",
+  "no-better-session-soon": "Nothing bigger is coming this week, so this is a good moment to clear these."
+};
 
 // A never-reviewed prompt has no FSRS state, so model its first retrieval as a one-day
 // memory from the moment it came due (the same one-day unit Orbit uses): waiting then
@@ -101,13 +121,49 @@ export function decideReminder(a: {
   };
 }
 
-export function composeReminder(count: number, baseUrl: string): { subject: string; html: string } {
+export function reminderReasonText(reason: SessionReadyReason): string {
+  return REMINDER_REASON_TEXT[reason];
+}
+
+export function composeReminder(
+  count: number, baseUrl: string, reason: SessionReadyReason
+): { subject: string; html: string } {
   const mins = Math.max(1, Math.ceil((count * 20) / 60));
-  const subject = `Reminder: ${count} prompt${count === 1 ? "" : "s"} due · ~${mins} min`;
-  const html = `
-<p>Take a minute to reinforce ${count} detail${count === 1 ? "" : "s"} you wanted to keep.</p>
-<p><a href="${baseUrl}/">Start review</a> (~${mins} min)</p>
-<p style="color:#888;font-size:13px">This is the only email this system sends. It backs off if you're busy.</p>`;
+  const countLabel = `${count} prompt${count === 1 ? "" : "s"}`;
+  const subject = `${countLabel} · ~${mins} min`;
+  const url = escapeHtml(baseUrl.replace(/\/$/, "") + "/");
+  const reasonText = escapeHtml(reminderReasonText(reason));
+  const icon = `<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" style="display:block">
+    <circle cx="3.5" cy="7" r="2.2" fill="${NOCTURNE.accent}"/>
+    <line x1="5.8" y1="7" x2="8.2" y2="7" stroke="${NOCTURNE.accent}" stroke-width="1.4" stroke-linecap="round"/>
+    <circle cx="10.5" cy="7" r="2.2" fill="${NOCTURNE.accent}"/>
+  </svg>`;
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:24px 16px;background:${NOCTURNE.bg};font-family:Inter,system-ui,-apple-system,sans-serif;color:${NOCTURNE.text};-webkit-font-smoothing:antialiased">
+<div style="max-width:440px;margin:0 auto">
+  <div style="background:${NOCTURNE.surface};border-radius:8px;padding:22px 24px 20px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+      ${icon}
+      <span style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:${NOCTURNE.muted}">Spaced repetition</span>
+    </div>
+    <p style="margin:0 0 12px;font-size:28px;line-height:1.15;font-weight:500;letter-spacing:-0.015em">
+      <span style="color:${NOCTURNE.text}">${escapeHtml(countLabel)}</span>
+      <span style="color:${NOCTURNE.muted}"> · ~${mins} min</span>
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:${NOCTURNE.muted}">${reasonText}</p>
+    <a href="${url}" style="display:inline-block;padding:6px 14px;border:1px solid ${NOCTURNE.accent};border-radius:8px;color:${NOCTURNE.accent};font-size:14px;font-weight:500;line-height:1.2;text-decoration:none">Start review</a>
+    <div style="height:1px;margin:24px 0 16px;background:linear-gradient(to right,transparent,${NOCTURNE.divider} 48px,${NOCTURNE.divider} calc(100% - 48px),transparent)"></div>
+    <p style="margin:0;font-size:11px;line-height:1.45;color:${NOCTURNE.muted}">This is the only email this system sends. It backs off if you're busy.</p>
+  </div>
+</div>
+</body>
+</html>`;
   return { subject, html };
 }
 
@@ -144,8 +200,8 @@ export async function runReminderCron(env: Env, now: Date): Promise<void> {
     cadence, lastReviewAt: lastReview?.t ?? null
   });
   console.log(JSON.stringify({ reminder: session.reason, ready: session.ready, due: session.dueCount, send: d.send }));
-  if (d.send) {
-    const { subject, html } = composeReminder(session.dueCount, env.BASE_URL);
+  if (d.send && session.ready) {
+    const { subject, html } = composeReminder(session.dueCount, env.BASE_URL, session.reason);
     await sendReminder(env, subject, html);
   }
   await setSetting(env.DB, "cadence", JSON.stringify(d.cadence));
