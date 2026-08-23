@@ -3,7 +3,14 @@ export function escapeHtml(s: string): string {
           .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-export function page(title: string, body: string, opts: { extraHead?: string; script?: string } = {}): Response {
+export function page(
+  title: string,
+  body: string,
+  opts: { extraHead?: string; script?: string; styles?: string[]; bodyClass?: string } = {}
+): Response {
+  const styles = opts.styles ?? ["/static/app.css", "/static/katex/katex.min.css"];
+  const styleLinks = styles.map(href => `<link rel="stylesheet" href="${href}">`).join("\n");
+  const bodyClass = opts.bodyClass ? ` class="${escapeHtml(opts.bodyClass)}"` : "";
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -12,11 +19,10 @@ export function page(title: string, body: string, opts: { extraHead?: string; sc
 <title>${escapeHtml(title)}</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
-<link rel="stylesheet" href="/static/app.css">
-<link rel="stylesheet" href="/static/katex/katex.min.css">
+${styleLinks}
 ${opts.extraHead ?? ""}
 </head>
-<body>
+<body${bodyClass}>
 <main>${body}</main>
 ${opts.script ? `<script src="${opts.script}"></script>` : ""}
 </body>

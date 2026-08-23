@@ -11,7 +11,8 @@ The canonical token sheet and component classes live in the external package the
 | Surface | Status | Notes |
 | --- | --- | --- |
 | Reminder email | **Done** | `composeReminder` in `src/email.ts` inlines Nocturne hex values (email clients ignore linked CSS). Supporting line reflects the session-worthiness reason (`full-session`, `waited-too-long`, `forgetting-cost`, `no-better-session-soon`). |
-| Web app (`public/static/app.css`) | **Planned** | Still uses the original minimal stylesheet. Migration = link Nocturne `styles.css` (or vend a copy under `public/static/`) and refactor route HTML to use `.btn`, `.card`, `.field`, etc. |
+| Review session | **Done** | `public/static/review.js` + `review.css` on Nocturne tokens (`nocturne.css`). Progress dots, End, Reveal/grade bar, inline flag panel, done/nothing-due close screens. Full nav only when nothing is due. |
+| Web app (other surfaces) | **Planned** | Capture, inbox, browse, settings still use `app.css`. |
 | Favicon | **Planned** | Current mark is warm orange on charcoal; Nocturne uses blurple accent on `#161826`. |
 
 ## Email layout (reference)

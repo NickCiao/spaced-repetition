@@ -1,0 +1,242 @@
+/* Review session — Nocturne session flow */
+
+body.review-session main,
+body.review-idle main {
+  max-width: 440px;
+  padding: var(--space-4) var(--space-4) var(--space-6);
+}
+
+body.review-session main { padding-top: var(--space-3); }
+
+/* Idle (nothing due) nav */
+body.review-idle .nav { margin-bottom: var(--space-8); }
+body.review-idle .nav a[aria-current="page"] { color: var(--color-accent); }
+
+/* — session stage — */
+.session-stage {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - var(--space-6) * 2);
+}
+
+.session-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.progress-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.progress-dots .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-neutral-800);
+  flex: none;
+}
+
+.progress-dots .dot.done { background: var(--color-accent-500); }
+.progress-dots .dot.current {
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+.session-end {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  text-decoration: none;
+  flex: none;
+}
+.session-end:hover { color: var(--color-accent); }
+
+/* — card — */
+.session-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  min-height: 200px;
+  padding: var(--space-2) 0;
+  cursor: default;
+}
+
+.session-card.tappable { cursor: pointer; }
+
+.session-question {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 22px;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+}
+
+.session-question.dimmed {
+  color: color-mix(in srgb, var(--color-text) 48%, transparent);
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.session-divider {
+  height: 1px;
+  margin: var(--space-4) 0;
+  background: linear-gradient(to right,
+    transparent, var(--color-divider) 48px,
+    var(--color-divider) calc(100% - 48px), transparent);
+}
+
+.session-answer {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 22px;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+  color: var(--color-text);
+}
+
+.session-source {
+  margin-top: var(--space-4);
+  font-size: 13px;
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+}
+
+.session-source a { color: inherit; text-underline-offset: 3px; }
+.session-source a:hover { color: var(--color-accent); }
+
+/* Cloze in session */
+.session-question .cloze,
+.session-answer .cloze-revealed {
+  color: var(--color-accent-400);
+  font-weight: var(--font-heading-weight);
+}
+
+/* — actions — */
+.session-actions {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.session-actions.waiting .grade-bar,
+.session-actions.waiting .overflow { opacity: 0.35; pointer-events: none; }
+
+.grade-bar {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.grade-bar .btn {
+  flex: 1;
+  padding: var(--space-3) var(--space-2);
+  font-size: 15px;
+}
+
+.grade-bar .btn-forgot { border-color: var(--color-divider); color: var(--color-text); }
+.grade-bar .btn-forgot:hover {
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+.grade-bar .btn-remembered { border-color: var(--color-accent); color: var(--color-accent); }
+
+.reveal-slot .btn {
+  width: 100%;
+  padding: var(--space-3);
+  font-size: 15px;
+}
+
+.session-hint {
+  font-size: 11px;
+  text-align: center;
+  color: color-mix(in srgb, var(--color-text) 45%, transparent);
+  margin: 0;
+}
+
+.overflow {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  font-size: 12px;
+}
+
+.overflow a {
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  text-decoration: none;
+  cursor: pointer;
+}
+.overflow a:hover { color: var(--color-accent); }
+
+/* — inline flag — */
+.flag-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.flag-panel .field > span {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+}
+
+.flag-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.flag-actions .btn { flex: none; }
+
+/* — close screens (done / nothing due) — */
+.session-close {
+  padding-top: var(--space-8);
+}
+
+.session-close-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--space-4);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+}
+
+.session-close-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  margin: 0 0 var(--space-4);
+}
+
+.session-close-title {
+  font-size: 32px;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin: 0 0 var(--space-2);
+}
+
+.session-close-meta {
+  font-size: 15px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  margin: 0 0 var(--space-6);
+}
+
+.session-close .btn { display: inline-flex; }
+
+@media (max-width: 480px) {
+  body.review-session main,
+  body.review-idle main { padding-left: var(--space-4); padding-right: var(--space-4); }
+  .session-question { font-size: 20px; }
+  .session-answer { font-size: 20px; }
+}

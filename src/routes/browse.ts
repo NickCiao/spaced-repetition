@@ -63,8 +63,10 @@ ${p?.flag_note ? `<p class="source">flag: ${escapeHtml(p.flag_note)}</p>` : ""}
   <option value="cloze"${p?.kind === "cloze" ? " selected" : ""}>Cloze</option></select>
   <label>Question</label><textarea id="q">${escapeHtml(p?.question ?? "")}</textarea>
   <label>Answer</label><textarea id="a">${escapeHtml(p?.answer ?? "")}</textarea>
-  <label><input type="checkbox" id="retired"${p?.retired ? " checked" : ""}> retired</label>
+  <label><input type="checkbox" id="retired"${p?.retired ? " checked" : ""}> retired <span class="source">(hide from review; recoverable)</span></label>
   <div class="btnrow"><button class="primary">Save</button></div>
+  ${p ? `<div class="btnrow" style="margin-top:12px"><button type="button" id="delete-prompt">Delete permanently</button></div>
+  <p class="source">Delete removes this prompt and its review history. Cannot be undone.</p>` : ""}
   <p class="flash" id="flash"></p>
 </form>
 <script>
@@ -85,6 +87,13 @@ async function submitPrompt(e) {
   else document.getElementById("flash").textContent = (await res.json()).error;
   return false;
 }
+${p ? `
+document.getElementById("delete-prompt").onclick = async () => {
+  if (!confirm("Delete this prompt permanently? Its review history will be gone and this cannot be undone.")) return;
+  const res = await fetch("/api/prompt/${p.id}/delete", { method: "POST" });
+  if (res.ok) location.href = "/browse/${p.source_id}";
+  else document.getElementById("flash").textContent = (await res.json()).error ?? "Delete failed";
+};` : ""}
 </script>`;
   return page(p ? "Edit prompt" : "New prompt", body);
 }
@@ -131,4 +140,13 @@ export async function promptApi(request: Request, env: Env): Promise<Response> {
          f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
          f.reps, f.lapses, f.state, f.last_review).run();
   return Response.json({ ok: true, id });
+}
+
+export async function deletePrompt(id: string, env: Env): Promise<Response> {
+  if (!/^[a-z0-9]{10}$/.test(id)) return new Response("not found", { status: 404 });
+  const p = await env.DB.prepare("SELECT id FROM prompts WHERE id = ?").bind(id).first();
+  if (!p) return Response.json({ error: "unknown prompt" }, { status: 404 });
+  await env.DB.prepare("DELETE FROM events WHERE prompt_id = ?").bind(id).run();
+  await env.DB.prepare("DELETE FROM prompts WHERE id = ?").bind(id).run();
+  return Response.json({ ok: true });
 }

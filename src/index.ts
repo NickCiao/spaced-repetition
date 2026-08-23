@@ -4,7 +4,7 @@ import { gradeApi, reviewPage } from "./routes/review";
 import { captureApi, capturePage, capturesToday, sourcesApi } from "./routes/capture";
 import { serveAsset, uploadAsset } from "./routes/assets";
 import { deleteCapture, inboxPage, previewApi, refineApi, refinePage } from "./routes/inbox";
-import { browseIndex, browseSource, promptApi, promptForm } from "./routes/browse";
+import { browseIndex, browseSource, deletePrompt, promptApi, promptForm } from "./routes/browse";
 import { settingsApi, settingsPage } from "./routes/settings";
 import { exportZip, importForeign, importZip } from "./routes/transfer";
 import { runReminderCron } from "./email";
@@ -43,6 +43,8 @@ export default {
     const pMatch = url.pathname.match(/^\/prompt\/(new|[a-z0-9]{10})$/);
     if (pMatch && request.method === "GET") return promptForm(pMatch[1], request, env);
     if (url.pathname === "/api/prompt" && request.method === "POST") return promptApi(request, env);
+    const promptDelMatch = url.pathname.match(/^\/api\/prompt\/([a-z0-9]{10})\/delete$/);
+    if (promptDelMatch && request.method === "POST") return deletePrompt(promptDelMatch[1], env);
     if (url.pathname === "/settings" && request.method === "GET") return settingsPage(env);
     if (url.pathname === "/api/settings" && request.method === "POST") return settingsApi(request, env);
     if (url.pathname === "/export.zip" && request.method === "GET") return exportZip(env);

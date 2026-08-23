@@ -4,21 +4,36 @@ import { applyGrade } from "../scheduler";
 import { buildSession } from "../session";
 import { page } from "../html";
 
+const NAV = `<nav class="nav">
+  <a href="/" aria-current="page">Review</a>
+  <a href="/capture">Capture</a>
+  <a href="/inbox">Inbox</a>
+  <a href="/browse">Browse</a>
+  <a href="/settings">Settings</a>
+</nav>`;
+
 export async function reviewPage(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const settings = await getSettings(env.DB);
+  const sourceId = url.searchParams.get("source");
   const session = await buildSession(env.DB, {
     ahead: url.searchParams.get("ahead") === "1",
-    sourceId: url.searchParams.get("source"),
+    sourceId,
     cap: settings.session_cap,
     tz: settings.timezone
   }, new Date());
 
-  const body = `
-<nav><a href="/">Review</a> <a href="/capture">Capture</a> <a href="/inbox">Inbox</a> <a href="/browse">Browse</a> <a href="/settings">Settings</a></nav>
+  const sessionPayload = { ...session, sourceId };
+  const hasCards = session.cards.length > 0;
+  const body = `${hasCards ? "" : NAV}
 <div id="review"></div>
-<script type="application/json" id="session">${JSON.stringify(session).replace(/</g, "\\u003c")}</script>`;
-  return page("Review", body, { script: "/static/review.js" });
+<script type="application/json" id="session">${JSON.stringify(sessionPayload).replace(/</g, "\\u003c")}</script>`;
+
+  return page("Review", body, {
+    script: "/static/review.js",
+    styles: ["/static/nocturne.css", "/static/katex/katex.min.css", "/static/review.css"],
+    bodyClass: hasCards ? "review-session" : "review-idle"
+  });
 }
 
 export async function gradeApi(request: Request, env: Env): Promise<Response> {

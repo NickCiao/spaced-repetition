@@ -119,6 +119,16 @@ describe("review", () => {
     const row = await env.DB.prepare("SELECT flag_note FROM prompts WHERE id = ?").bind(pid).first();
     expect(row?.flag_note).toBe("flagged");
   });
+
+  it("delete removes the prompt and its events", async () => {
+    const deletePid = await seedReviewPrompt("delete-me");
+    await POST("/api/grade", { prompt_id: deletePid, action: "remembered" });
+    expect((await POST(`/api/prompt/${deletePid}/delete`, {})).status).toBe(200);
+    expect(await env.DB.prepare("SELECT id FROM prompts WHERE id = ?").bind(deletePid).first()).toBeNull();
+    const ev = await env.DB.prepare("SELECT COUNT(*) AS n FROM events WHERE prompt_id = ?").bind(deletePid).first();
+    expect(ev?.n).toBe(0);
+    expect((await POST("/api/prompt/nope/delete", {})).status).toBe(404);
+  });
 });
 
 describe("capture", () => {

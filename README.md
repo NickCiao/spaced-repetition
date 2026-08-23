@@ -126,7 +126,7 @@ curl -H "Authorization: Bearer $SR_TOKEN" --data-binary @export.zip "https://<yo
 
 Restore onto a blank deploy: `.../import?apply=1&restore=1`.
 
-The export zip includes `retired.jsonl` (retired prompts' content archive). To un-retire a prompt, re-add its block with its `<!-- id -->` comment into its source file during import.
+The export zip includes `retired.jsonl` (retired prompts' content archive). To un-retire a prompt, re-add its block with its `<!-- id -->` comment into its source file during import. **Delete** (review overflow or edit page) removes a prompt and its review history permanently — it will not appear in export and cannot be undone through the app (only an older backup zip could bring it back).
 
 ## Backup
 
