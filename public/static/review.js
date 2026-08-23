@@ -54,8 +54,13 @@
     </div>`;
   }
 
+  function setInSession(on) {
+    document.body.classList.toggle("in-session", on);
+  }
+
   function finish() {
     if (session.dueRemaining > 0) {
+      setInSession(false);
       closeScreen(
         `${session.dueRemaining} more due`,
         "Keep going?",
@@ -66,6 +71,7 @@
       );
       return;
     }
+    setInSession(false);
     const n = nextReview();
     closeScreen(
       "",
@@ -78,6 +84,7 @@
   }
 
   function nothingDue() {
+    setInSession(false);
     const n = nextReview();
     closeScreen(
       "Nothing due",
@@ -176,7 +183,7 @@
          <p class="session-hint">tap the card or press space</p>`;
 
     el.innerHTML = `
-      <div class="session-stage">
+      <div class="session">
         <div class="session-top">
           <div class="progress-dots">${progressDots()}</div>
           <a class="session-end" id="end">End</a>
@@ -232,5 +239,5 @@
     else if (revealed && e.key === "ArrowRight") grade("remembered");
   });
 
-  session.cards.length ? render() : nothingDue();
+  session.cards.length ? (setInSession(true), render()) : nothingDue();
 })();

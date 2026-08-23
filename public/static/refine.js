@@ -1,29 +1,34 @@
 (() => {
   const root = document.getElementById("refine");
-  const prompts = [];
+  let formIndex = 0;
 
-  // dataset values decode HTML entities — re-escape at every DOM re-interpolation.
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
   function promptForm() {
+    formIndex += 1;
     return `
-<div class="card" data-i="${prompts.length}">
-  <label>Kind</label>
-  <select class="kind"><option value="qa">Q / A</option><option value="cloze">Cloze</option></select>
-  <label>Question (cloze: use {{spans}})</label>
-  <textarea class="q"></textarea>
-  <label class="a-label">Answer</label>
-  <textarea class="a"></textarea>
-  <label class="img-label">Image</label>
-  <input type="file" class="img" accept="image/*">
-  <div class="overflow"><a class="preview-toggle">Preview</a></div>
+<div class="card elev-sm prompt-editor" data-i="${formIndex}">
+  <div class="seg" role="tablist" aria-label="Prompt kind">
+    <button type="button" class="seg-opt checked" data-kind="qa" role="tab" aria-selected="true">Q / A</button>
+    <button type="button" class="seg-opt" data-kind="cloze" role="tab" aria-selected="false">Cloze</button>
+  </div>
+  <div class="field">
+    <label>Question</label>
+    <textarea class="input q"></textarea>
+  </div>
+  <div class="field a-field">
+    <label class="a-label">Answer</label>
+    <textarea class="input a"></textarea>
+  </div>
+  <div class="prompt-editor-foot">
+    <label class="btn btn-ghost"><i class="ph ph-image"></i> Attach image<input type="file" class="img" accept="image/*" hidden></label>
+    <button type="button" class="btn btn-ghost preview-toggle">Preview</button>
+  </div>
   <div class="preview"></div>
 </div>`;
   }
 
-  // Same downscale as capture.js: keeps refine's pasted/attached images consistent
-  // with captured ones (bounded size, one encoding) rather than uploading originals.
   async function downscale(file) {
     const bmp = await createImageBitmap(file);
     const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
@@ -50,14 +55,31 @@
     }
   }
 
+  function setKind(card, kind) {
+    card.querySelectorAll(".seg-opt").forEach((b) => {
+      const on = b.dataset.kind === kind;
+      b.classList.toggle("checked", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    const aField = card.querySelector(".a-field");
+    if (aField) aField.style.display = kind === "cloze" ? "none" : "";
+  }
+
   function render() {
     root.innerHTML = `
-<label>Source</label>
-<input type="text" id="src-name" list="source-list" value="${esc(root.dataset.sourceName)}">
-<datalist id="source-list"></datalist>
-<div id="forms">${promptForm()}</div>
-<div class="btnrow"><button id="add">+ prompt</button><button id="save" class="primary">Save prompts</button></div>
-<p class="flash" id="flash"></p>`;
+<div class="form">
+  <div class="field">
+    <label for="src-name">Source</label>
+    <input class="input" type="text" id="src-name" list="source-list" value="${esc(root.dataset.sourceName)}">
+    <datalist id="source-list"></datalist>
+  </div>
+  <div id="forms">${promptForm()}</div>
+  <div class="form-actions">
+    <button type="button" class="btn btn-secondary" id="add"><i class="ph ph-plus"></i> Another prompt</button>
+    <button type="button" class="btn btn-primary" id="save">Save prompts</button>
+  </div>
+  <p class="flash" id="flash"></p>
+</div>`;
 
     document.getElementById("src-name").oninput = async (e) => {
       const res = await fetch(`/api/sources?q=${encodeURIComponent(e.target.value)}`);
@@ -69,6 +91,12 @@
       document.getElementById("forms").insertAdjacentHTML("beforeend", promptForm());
     document.getElementById("save").onclick = save;
     root.addEventListener("click", async (e) => {
+      const seg = e.target.closest(".seg-opt");
+      if (seg) {
+        const card = seg.closest(".card");
+        setKind(card, seg.dataset.kind);
+        return;
+      }
       if (!e.target.classList.contains("preview-toggle")) return;
       const card = e.target.closest(".card");
       const body = collect(card);
@@ -79,24 +107,15 @@
       card.querySelector(".preview").innerHTML = `<hr>${questionHtml}<hr>${answerHtml}`;
     });
     root.addEventListener("change", async (e) => {
-      if (e.target.classList.contains("kind")) {
-        const card = e.target.closest(".card");
-        const isCloze = e.target.value === "cloze";
-        card.querySelector(".a-label").style.display = isCloze ? "none" : "";
-        card.querySelector(".a").style.display = isCloze ? "none" : "";
-        return;
-      }
       if (e.target.classList.contains("img")) {
         const card = e.target.closest(".card");
         const file = e.target.files[0];
-        e.target.value = ""; // allow re-attaching the same file later
+        e.target.value = "";
         if (!file) return;
-        const isCloze = card.querySelector(".kind").value === "cloze";
-        await attachImage(file, card.querySelector(isCloze ? ".q" : ".a"));
+        const kind = card.querySelector(".seg-opt.checked")?.dataset.kind ?? "qa";
+        await attachImage(file, card.querySelector(kind === "cloze" ? ".q" : ".a"));
       }
     });
-    // Paste an image directly into a question/answer textarea — same upload path
-    // as the file input, targeting whichever textarea the cursor is in.
     root.addEventListener("paste", async (e) => {
       const t = e.target;
       if (!t.classList || !(t.classList.contains("q") || t.classList.contains("a"))) return;
@@ -108,14 +127,14 @@
   }
 
   const collect = (card) => ({
-    kind: card.querySelector(".kind").value,
+    kind: card.querySelector(".seg-opt.checked")?.dataset.kind ?? "qa",
     question: card.querySelector(".q").value,
     answer: card.querySelector(".a").value
   });
 
   async function save() {
     const btn = document.getElementById("save");
-    if (btn.disabled) return; // double-click guard — the server claim is the real defense
+    if (btn.disabled) return;
     btn.disabled = true;
     try {
       const cards = [...document.querySelectorAll("#forms .card")].map(collect)

@@ -27,5 +27,12 @@
 	},
 	"vars": {
 		"EMAIL_FROM": "onboarding@resend.dev"
+	},
+	"observability": {
+		"enabled": true,
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1
+		}
 	}
 }

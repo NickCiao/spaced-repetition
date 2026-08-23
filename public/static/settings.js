@@ -2,19 +2,17 @@
   const MODES = {
     native: {
       accept: ".zip",
-      blurb: "Put back a zip you exported from this app, after editing offline.",
       fileNameDefault: "Select a file to import",
       fileHint: ".zip export from this app",
-      consequence: "Can edit, add, and retire existing prompts. Preview first to see exactly what changes.",
+      consequence: "Can edit, add, and retire existing prompts — preview first.",
       applyLabel: "Apply changes",
       expects: ["export"],
     },
     foreign: {
       accept: ".txt,.mochi,.zip",
-      blurb: "One-time migration — cards from another flashcard app.",
       fileNameDefault: "Select a file to import",
       fileHint: ".txt, .mochi, or .zip from Anki / Mochi",
-      consequence: "Adds new prompts only — fresh scheduling. Does not edit or retire cards already here.",
+      consequence: "Adds new prompts with fresh scheduling — never touches existing cards.",
       applyLabel: "Import new",
       expects: ["anki-txt", "mochi", "unknown-zip"],
     },
@@ -53,14 +51,12 @@
     },
   };
 
-  const blurbText = document.getElementById("import-blurb-text");
   const fileInput = document.getElementById("import-file");
   const fileName = document.getElementById("file-name");
   const fileMeta = document.getElementById("file-meta");
   const fileHint = document.getElementById("file-hint");
   const consequence = document.getElementById("import-consequence");
-  const foreignWrap = document.getElementById("foreign-source-wrap");
-  const fieldSlot = document.querySelector(".import-field-slot");
+  const importSlot = document.getElementById("import-slot");
   const applyBtn = document.getElementById("import-apply");
   const dryBtn = document.getElementById("import-dry");
   const importOut = document.getElementById("importout");
@@ -204,14 +200,13 @@
   function setMode(m, opts = {}) {
     mode = m;
     const cfg = MODES[m];
-    document.querySelectorAll(".segmented-btn").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.mode === m);
-      btn.setAttribute("aria-selected", btn.dataset.mode === m ? "true" : "false");
+    document.querySelectorAll(".seg-opt[data-mode]").forEach((btn) => {
+      const on = btn.dataset.mode === m;
+      btn.classList.toggle("checked", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
     });
-    blurbText.textContent = cfg.blurb;
     fileInput.accept = cfg.accept;
-    foreignWrap.classList.toggle("active", m === "foreign");
-    fieldSlot.classList.toggle("open", m === "foreign");
+    importSlot.classList.toggle("open", m === "foreign");
     if (!opts.keepFile) {
       fileInput.value = "";
       clearFileDisplay();
@@ -225,7 +220,7 @@
     if (opts.keepFile || fileInput.files[0]) validateFile();
   }
 
-  document.querySelectorAll(".segmented-btn").forEach((btn) => {
+  document.querySelectorAll(".seg-opt[data-mode]").forEach((btn) => {
     btn.addEventListener("click", () => setMode(btn.dataset.mode));
   });
 

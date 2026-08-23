@@ -23,7 +23,7 @@ export default {
     if (request.method === "GET" && /^\/(sw\.js$|static\/)/.test(url.pathname)) return env.ASSETS.fetch(request);
     if (url.pathname === "/" && request.method === "GET") return reviewPage(request, env);
     if (url.pathname === "/api/grade" && request.method === "POST") return gradeApi(request, env);
-    if (url.pathname === "/capture" && request.method === "GET") return capturePage();
+    if (url.pathname === "/capture" && request.method === "GET") return capturePage(env);
     if (url.pathname === "/api/capture" && request.method === "POST") return captureApi(request, env);
     if (url.pathname === "/api/captures/today" && request.method === "GET") return capturesToday(env);
     if (url.pathname === "/api/sources" && request.method === "GET") return sourcesApi(request, env);

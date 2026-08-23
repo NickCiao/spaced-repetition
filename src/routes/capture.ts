@@ -1,28 +1,36 @@
 import type { Env } from "../env.d";
 import { getSettings, newId, nowIso } from "../db";
 import { localDate } from "../clock";
-import { page } from "../html";
+import { page, shellFor } from "../html";
 
-export function capturePage(): Response {
+export async function capturePage(env: Env): Promise<Response> {
+  const shell = await shellFor(env.DB, "capture");
   const body = `
-<nav><a href="/">Review</a> <a href="/capture">Capture</a> <a href="/inbox">Inbox</a> <a href="/browse">Browse</a> <a href="/settings">Settings</a></nav>
-<h1>Capture</h1>
-<form id="cap">
-  <label for="text">What's worth keeping?</label>
-  <textarea id="text" required></textarea>
-  <label for="source">Source (optional)</label>
-  <input type="text" id="source" list="source-list" autocomplete="off">
-  <datalist id="source-list"></datalist>
-  <label for="photo">Photo (optional)</label>
-  <input type="file" id="photo" accept="image/*">
-  <div class="btnrow"><button class="primary" type="submit">Save</button></div>
-  <p class="flash" id="flash"></p>
+<h1 class="page-title">Capture</h1>
+<form id="cap" class="form">
+  <div class="field">
+    <label for="text">What's worth keeping?</label>
+    <textarea class="input capture-box" id="text" required></textarea>
+  </div>
+  <div class="attach-row">
+    <div class="field">
+      <label for="source">Source (optional)</label>
+      <input class="input" type="text" id="source" list="source-list" placeholder="Book, article, podcast…" autocomplete="off">
+      <datalist id="source-list"></datalist>
+    </div>
+    <label class="btn btn-secondary"><i class="ph ph-camera"></i> Photo<input type="file" id="photo" accept="image/*" hidden></label>
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">Save</button>
+    <span class="flash" id="flash"></span>
+  </div>
 </form>
-<h2>Today</h2>
-<div id="today"></div>`;
+<h6 class="kicker">Today <span class="count" id="today-count"></span></h6>
+<div class="rows" id="today"></div>`;
   return page("Capture", body, {
     extraHead: `<link rel="manifest" href="/static/manifest.webmanifest" crossorigin="use-credentials">`,
-    script: "/static/capture.js"
+    script: "/static/capture.js",
+    shell
   });
 }
 

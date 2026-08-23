@@ -11,7 +11,9 @@ Single-user spaced-repetition app: capture → refine → review → export/impo
 
 **Stack:** Cloudflare Worker (TypeScript) + D1 + R2. Server-rendered HTML + vanilla JS. No web/client framework.
 
-**Layout:** `src/index.ts` routes only. Pure logic in `scheduler`, `markdown`, `format`, `email` (decideReminder). HTTP in `src/routes/*`. Tests in `test/` via `@cloudflare/vitest-plugin`.
+**Layout:** `src/index.ts` routes only. Pure logic in `scheduler`, `markdown`, `format`, `email` (decideReminder). HTTP in `src/routes/*`. HTML shell + helpers in `html.ts`. Tests in `test/` via `@cloudflare/vitest-plugin`.
+
+**Static UI:** `public/static/nocturne.css` (tokens), `nocturne-app.css` (shell + screens), self-hosted Phosphor + KaTeX under `public/static/`. Run `npm run vendor:static` after `npm install` (also runs on postinstall) to copy KaTeX and Phosphor from `node_modules`.
 
 **Do not violate:**
 - Binary grades only (`remembered`/`forgot`). No streaks, stats, or counters.

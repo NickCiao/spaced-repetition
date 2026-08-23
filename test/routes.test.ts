@@ -77,6 +77,8 @@ describe("review", () => {
     expect(html).toContain('id="session"');
     expect(html).toContain("embedded-question");
     expect(html).toContain(pid);
+    expect(html).toContain("class=\"rail\"");
+    expect(html).toContain("nocturne-app.css");
   });
 
   it("grading remembered pushes due forward and logs an event", async () => {

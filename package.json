@@ -11,7 +11,9 @@
     "db:wipe:local": "bash scripts/db-wipe-local.sh",
     "db:wipe:remote": "bash scripts/db-wipe-remote.sh",
     "test": "vitest run",
-    "types": "wrangler types"
+    "types": "wrangler types",
+    "vendor:static": "node scripts/vendor-static.mjs",
+    "postinstall": "npm run vendor:static"
   },
   "dependencies": {
     "fflate": "^0.8.2",
@@ -22,6 +24,7 @@
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.0.0",
     "@cloudflare/workers-types": "^5.20260821.1",
+    "@phosphor-icons/web": "2.1.1",
     "typescript": "^5.6.0",
     "vitest": "^4.1.11",
     "wrangler": "^4.0.0"

@@ -3,6 +3,14 @@ import { retrievability } from "./scheduler";
 import { endOfLocalDay } from "./clock";
 import { renderPromptAnswer, renderPromptQuestion } from "./markdown";
 
+export async function countDue(db: D1Database, tz: string, now: Date): Promise<number> {
+  const cutoff = endOfLocalDay(now, tz).toISOString();
+  const row = await db.prepare(
+    "SELECT COUNT(*) AS n FROM prompts WHERE retired = 0 AND due < ?"
+  ).bind(cutoff).first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
 export type SessionCard = {
   id: string; kind: "qa" | "cloze"; questionHtml: string; answerHtml: string;
   sourceName: string; sourceUrl: string | null;

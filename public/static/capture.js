@@ -41,9 +41,10 @@
     try {
       const res = await fetch("/api/captures/today");
       const { items } = await res.json();
+      document.getElementById("today-count").textContent = items.length ? String(items.length) : "";
       document.getElementById("today").innerHTML =
-        items.map((i) => `<div class="item">${esc(i.text)}</div>`).join("") ||
-        '<p class="source">Nothing yet.</p>';
+        items.map((i) => `<div class="row"><div class="row-main"><div class="row-text">${esc(i.text)}</div></div></div>`).join("") ||
+        '<p class="empty">Nothing yet.</p>';
     } catch { /* offline */ }
   }
 

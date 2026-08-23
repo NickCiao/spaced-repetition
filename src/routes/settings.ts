@@ -1,78 +1,74 @@
 import type { Env } from "../env.d";
 import { getSettings, setSetting } from "../db";
-import { escapeHtml, page } from "../html";
+import { escapeHtml, page, shellFor } from "../html";
 
 export async function settingsPage(env: Env): Promise<Response> {
   const s = await getSettings(env.DB);
+  const shell = await shellFor(env.DB, "settings");
   const body = `
-<nav><a href="/">Review</a> <a href="/capture">Capture</a> <a href="/inbox">Inbox</a> <a href="/browse">Browse</a> <a href="/settings">Settings</a></nav>
-<h1>Settings</h1>
-<form id="settings-form">
-  <label>Session cap</label><input type="text" id="session_cap" value="${s.session_cap}">
-  <label>Desired retention (0.7–0.97)</label><input type="text" id="desired_retention" value="${s.desired_retention}">
-  <label>Reminder hour (0–23, local)</label><input type="text" id="email_hour" value="${s.email_hour}">
-  <label>Timezone</label><input type="text" id="timezone" value="${escapeHtml(s.timezone)}">
-  <div class="btnrow"><button class="primary">Save</button></div>
-  <p class="flash" id="flash"></p>
+<h1 class="page-title">Settings</h1>
+<form id="settings-form" class="form">
+  <h6 class="kicker">Scheduler</h6>
+  <div class="form-grid">
+    <div class="field"><label for="session_cap">Session cap</label><input class="input" type="text" id="session_cap" value="${s.session_cap}"></div>
+    <div class="field"><label for="desired_retention">Desired retention (0.7–0.97)</label><input class="input" type="text" id="desired_retention" value="${s.desired_retention}"></div>
+  </div>
+  <h6 class="kicker">Reminder</h6>
+  <div class="form-grid">
+    <div class="field"><label for="email_hour">Hour (0–23, local)</label><input class="input" type="text" id="email_hour" value="${s.email_hour}"></div>
+    <div class="field"><label for="timezone">Timezone</label><input class="input" type="text" id="timezone" value="${escapeHtml(s.timezone)}"></div>
+  </div>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Save</button>
+    <span class="flash" id="flash"></span>
+  </div>
 </form>
 
-<div class="settings-section">
-  <h2>Backup</h2>
-  <p class="source section-lead">Full snapshot for safekeeping, or the first step of the refactor loop (export → edit → import).</p>
-  <div class="card backup-card">
-    <a href="/export.zip" class="backup-export-link">
-      <span>
-        <strong>Export everything</strong>
-        <span class="source">export.zip — prompts, assets, log</span>
-      </span>
-      <span class="backup-export-icon" aria-hidden="true">↓</span>
-    </a>
-  </div>
+<h6 class="kicker">Backup</h6>
+<div class="card elev-sm">
+  <a href="/export.zip" class="export-link">
+    <span>
+      <span class="export-title">Export everything</span>
+      <span class="export-meta">export.zip — prompts, assets, review log</span>
+    </span>
+    <i class="ph ph-download-simple"></i>
+  </a>
 </div>
 
-<div class="settings-section">
-  <h2>Import</h2>
-  <p class="source section-lead">What do you want to do?</p>
-  <div class="card import-card">
-    <div class="segmented" role="tablist" aria-label="Import intent">
-      <button type="button" class="segmented-btn active" data-mode="native" role="tab" aria-selected="true">Restore / refactor</button>
-      <button type="button" class="segmented-btn" data-mode="foreign" role="tab" aria-selected="false">Migrate in</button>
-    </div>
-    <p class="import-blurb" id="import-blurb-text">Put back a zip you exported from this app, after editing offline.</p>
-    <form id="import-form">
-      <div class="file-drop">
-        <div class="file-drop-inner">
-          <div class="file-drop-text">
-            <span class="file-drop-name" id="file-name">Select a file to import</span>
-            <span class="file-drop-meta" id="file-meta" hidden></span>
-            <span class="file-drop-hint" id="file-hint">.zip export from this app</span>
-          </div>
-          <label class="file-drop-btn">
-            <input type="file" id="import-file" hidden>
-            Choose file
-          </label>
-        </div>
-      </div>
-      <div class="import-field-slot">
-        <div id="foreign-source-wrap" class="import-field-panel">
-          <label>Source name (headerless Anki export)</label>
-          <input type="text" id="foreignsource" value="Anki import">
-        </div>
-      </div>
-      <p class="import-consequence" id="import-consequence">Can edit, add, and retire existing prompts. Preview first to see exactly what changes.</p>
-      <div class="import-file-warn" id="import-file-warn" hidden>
-        <span id="import-file-warn-text"></span>
-        <button type="button" class="import-switch-btn" id="import-switch-btn"></button>
-      </div>
-      <div class="import-btnstack">
-        <button type="submit" id="import-dry">Preview changes</button>
-        <button type="submit" class="primary" id="import-apply">Apply changes</button>
-      </div>
-      <pre id="importout"></pre>
-    </form>
+<h6 class="kicker">Import</h6>
+<div class="card elev-sm import-card">
+  <div class="seg" role="tablist" aria-label="Import intent">
+    <button type="button" class="seg-opt checked" data-mode="native" role="tab" aria-selected="true">Restore / refactor</button>
+    <button type="button" class="seg-opt" data-mode="foreign" role="tab" aria-selected="false">Migrate in</button>
   </div>
+  <form id="import-form">
+    <div class="file-row">
+      <div>
+        <div class="file-row-name" id="file-name">Select a file to import</div>
+        <div class="file-row-hint" id="file-hint">.zip export from this app</div>
+        <div class="file-row-hint" id="file-meta" hidden></div>
+      </div>
+      <label class="btn btn-secondary">Choose file<input type="file" id="import-file" hidden></label>
+    </div>
+    <div class="import-slot" id="import-slot">
+      <div class="field" id="foreign-source-wrap">
+        <label for="foreignsource">Source name (headerless Anki export)</label>
+        <input class="input" type="text" id="foreignsource" value="Anki import">
+      </div>
+    </div>
+    <p class="import-consequence" id="import-consequence">Can edit, add, and retire existing prompts — preview first.</p>
+    <div class="import-warn" id="import-file-warn" hidden>
+      <span id="import-file-warn-text"></span>
+      <button type="button" class="btn btn-ghost" id="import-switch-btn"></button>
+    </div>
+    <div class="form-actions" style="margin-top:0">
+      <button type="submit" class="btn btn-secondary" id="import-dry">Preview changes</button>
+      <button type="submit" class="btn btn-primary" id="import-apply">Apply changes</button>
+    </div>
+    <pre class="import-out" id="importout"></pre>
+  </form>
 </div>`;
-  return page("Settings", body, { script: "/static/settings.js" });
+  return page("Settings", body, { script: "/static/settings.js", shell });
 }
 
 export async function settingsApi(request: Request, env: Env): Promise<Response> {

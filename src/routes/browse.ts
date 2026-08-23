@@ -1,47 +1,59 @@
 import type { Env } from "../env.d";
 import { newId, nowIso, type PromptRow, type SourceRow } from "../db";
 import { newCardFields } from "../scheduler";
-import { escapeHtml, page } from "../html";
-
-const NAV = `<nav><a href="/">Review</a> <a href="/capture">Capture</a> <a href="/inbox">Inbox</a> <a href="/browse">Browse</a> <a href="/settings">Settings</a></nav>`;
+import { escapeHtml, hostOnly, page, shellFor } from "../html";
 
 export async function browseIndex(env: Env): Promise<Response> {
+  const shell = await shellFor(env.DB, "browse");
   const rows = (await env.DB.prepare(`
     SELECT s.id, s.name, COUNT(p.id) AS n
     FROM sources s LEFT JOIN prompts p ON p.source_id = s.id AND p.retired = 0
     GROUP BY s.id ORDER BY s.created_at DESC`).all<{ id: string; name: string; n: number }>()).results;
-  const body = `${NAV}<h1>Browse</h1>` + (rows.map(r =>
-    `<div class="item"><a href="/browse/${r.id}">${escapeHtml(r.name)}</a> <span class="source">${r.n} prompts</span></div>`
-  ).join("") || "<p class='source'>No sources yet.</p>");
-  return page("Browse", body);
+  const list = rows.map(r =>
+    `<div class="row">
+      <div class="row-main"><div class="row-text"><a href="/browse/${r.id}">${escapeHtml(r.name)}</a></div></div>
+      <span class="row-count">${r.n} prompts</span>
+    </div>`
+  ).join("") || "<p class='empty'>No sources yet.</p>";
+  const body = `<h1 class="page-title">Browse</h1><div class="rows">${list}</div>`;
+  return page("Browse", body, { shell });
 }
 
 export async function browseSource(sourceId: string, env: Env): Promise<Response> {
+  const shell = await shellFor(env.DB, "browse");
   const src = await env.DB.prepare("SELECT * FROM sources WHERE id = ?").bind(sourceId).first<SourceRow>();
   if (!src) return new Response("not found", { status: 404 });
   const prompts = (await env.DB.prepare(
     "SELECT * FROM prompts WHERE source_id = ? ORDER BY position").bind(sourceId).all<PromptRow>()).results;
+  const active = prompts.filter(p => !p.retired).length;
   const list = prompts.map(p => `
-    <div class="item">
-      <a href="/prompt/${p.id}">${escapeHtml(p.question.slice(0, 120))}</a>
-      ${p.retired ? '<span class="source">retired</span>' : ""}
-      ${p.flag_note ? '<span class="source">flagged</span>' : ""}
-    </div>`).join("") || "<p class='source'>No prompts.</p>";
-  const body = `${NAV}
-<h1>${escapeHtml(src.name)}</h1>
-${src.url && /^https?:\/\//i.test(src.url) ? `<p class="source"><a href="${escapeHtml(src.url)}">${escapeHtml(src.url)}</a></p>` : ""}
-<div class="btnrow">
-  <a class="btn" href="/?source=${src.id}">Review this source now</a>
-  <a class="btn" href="/?source=${src.id}&ahead=1">Review ahead</a>
-  <a class="btn" href="/prompt/new?source=${src.id}">+ prompt</a>
+    <div class="row${p.retired ? " retired" : ""}">
+      <div class="row-main"><div class="row-text"><a href="/prompt/${p.id}">${escapeHtml(p.question.slice(0, 120))}</a></div></div>
+      ${p.flag_note ? '<span class="tag tag-outline">flagged</span>' : ""}
+      ${p.retired ? '<span class="tag tag-neutral">retired</span>' : ""}
+    </div>`).join("") || "<p class='empty'>No prompts.</p>";
+  const urlLine = src.url && /^https?:\/\//i.test(src.url)
+    ? `<p class="source-url"><a href="${escapeHtml(src.url)}" target="_blank" rel="noopener">${escapeHtml(hostOnly(src.url))}</a></p>`
+    : "";
+  const body = `
+<a class="crumb" href="/browse"><i class="ph ph-arrow-left"></i> Browse</a>
+<h1 class="page-title source-title">${escapeHtml(src.name)}</h1>
+${urlLine}
+<div class="source-actions">
+  <a class="btn btn-primary" href="/?source=${src.id}"><i class="ph ph-cards"></i> Review now</a>
+  <a class="btn btn-secondary" href="/?source=${src.id}&ahead=1">Review ahead</a>
+  <a class="btn btn-secondary" href="/prompt/new?source=${src.id}"><i class="ph ph-plus"></i> Prompt</a>
 </div>
-${list}`;
-  return page(src.name, body);
+<h6 class="kicker">Prompts <span class="count">${active}</span></h6>
+<div class="rows">${list}</div>`;
+  return page(src.name, body, { shell });
 }
 
 export async function promptForm(idOrNew: string, request: Request, env: Env): Promise<Response> {
+  const shell = await shellFor(env.DB, "browse");
   let p: PromptRow | null = null;
   let sourceId = new URL(request.url).searchParams.get("source") ?? "";
+  let sourceName = "";
   if (idOrNew !== "new") {
     p = await env.DB.prepare("SELECT * FROM prompts WHERE id = ?").bind(idOrNew).first<PromptRow>();
     if (!p) return new Response("not found", { status: 404 });
@@ -49,27 +61,62 @@ export async function promptForm(idOrNew: string, request: Request, env: Env): P
   } else {
     // Query param is attacker-reachable: require a well-formed id naming a real source.
     if (!/^[a-z0-9]{10}$/.test(sourceId)) return new Response("not found", { status: 404 });
-    const src = await env.DB.prepare("SELECT id FROM sources WHERE id = ?").bind(sourceId).first();
+    const src = await env.DB.prepare("SELECT id, name FROM sources WHERE id = ?").bind(sourceId).first<SourceRow>();
     if (!src) return new Response("not found", { status: 404 });
+    sourceName = src.name;
   }
-  const body = `${NAV}
-<h1>${p ? "Edit prompt" : "New prompt"}</h1>
-${p?.flag_note ? `<p class="source">flag: ${escapeHtml(p.flag_note)}</p>` : ""}
-<form method="post" action="/api/prompt" onsubmit="return submitPrompt(event)">
+  if (!sourceName) {
+    const src = await env.DB.prepare("SELECT name FROM sources WHERE id = ?").bind(sourceId).first<SourceRow>();
+    sourceName = src?.name ?? "";
+  }
+  const flagCard = p?.flag_note ? `
+<div class="card elev-sm context-card">
+  <span class="card-kicker"><i class="ph ph-flag"></i> Flagged during review</span>
+  <p class="context-text">${escapeHtml(p.flag_note)}</p>
+  <span class="card-meta">Saving clears the flag.</span>
+</div>` : "";
+  const body = `
+<a class="crumb" href="/browse/${escapeHtml(sourceId)}"><i class="ph ph-arrow-left"></i> ${escapeHtml(sourceName)}</a>
+<h1 class="page-title">${p ? "Edit prompt" : "New prompt"}</h1>
+${flagCard}
+<form class="form" method="post" action="/api/prompt" onsubmit="return submitPrompt(event)">
   <input type="hidden" id="pid" value="${escapeHtml(p?.id ?? "")}">
   <input type="hidden" id="sid" value="${escapeHtml(sourceId)}">
-  <label>Kind</label>
-  <select id="kind"><option value="qa"${p?.kind !== "cloze" ? " selected" : ""}>Q / A</option>
-  <option value="cloze"${p?.kind === "cloze" ? " selected" : ""}>Cloze</option></select>
-  <label>Question</label><textarea id="q">${escapeHtml(p?.question ?? "")}</textarea>
-  <label>Answer</label><textarea id="a">${escapeHtml(p?.answer ?? "")}</textarea>
-  <label><input type="checkbox" id="retired"${p?.retired ? " checked" : ""}> retired <span class="source">(hide from review; recoverable)</span></label>
-  <div class="btnrow"><button class="primary">Save</button></div>
-  ${p ? `<div class="btnrow" style="margin-top:12px"><button type="button" id="delete-prompt">Delete permanently</button></div>
-  <p class="source">Delete removes this prompt and its review history. Cannot be undone.</p>` : ""}
+  <input type="hidden" id="kind" value="${p?.kind === "cloze" ? "cloze" : "qa"}">
+  <div class="seg" role="tablist" aria-label="Prompt kind">
+    <button type="button" class="seg-opt${p?.kind !== "cloze" ? " checked" : ""}" data-kind="qa" role="tab" aria-selected="${p?.kind !== "cloze" ? "true" : "false"}">Q / A</button>
+    <button type="button" class="seg-opt${p?.kind === "cloze" ? " checked" : ""}" data-kind="cloze" role="tab" aria-selected="${p?.kind === "cloze" ? "true" : "false"}">Cloze</button>
+  </div>
+  <div class="field">
+    <label for="q">Question</label>
+    <textarea class="input" id="q">${escapeHtml(p?.question ?? "")}</textarea>
+  </div>
+  <div class="field" id="answer-field">
+    <label for="a">Answer</label>
+    <textarea class="input" id="a">${escapeHtml(p?.answer ?? "")}</textarea>
+  </div>
+  <label class="check"><input type="checkbox" id="retired"${p?.retired ? " checked" : ""}> Retired <span class="note">hidden from review; recoverable</span></label>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Save</button>
+  </div>
   <p class="flash" id="flash"></p>
 </form>
+${p ? `<div class="danger">
+  <button type="button" class="btn btn-secondary" id="delete-prompt">Delete permanently</button>
+  <p class="danger-note">Removes this prompt and its review history. Cannot be undone.</p>
+</div>` : ""}
 <script>
+function setKind(k) {
+  document.getElementById("kind").value = k;
+  document.querySelectorAll(".seg-opt").forEach(b => {
+    const on = b.dataset.kind === k;
+    b.classList.toggle("checked", on);
+    b.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  document.getElementById("answer-field").style.display = k === "cloze" ? "none" : "";
+}
+document.querySelectorAll(".seg-opt").forEach(b => b.onclick = () => setKind(b.dataset.kind));
+setKind(document.getElementById("kind").value);
 async function submitPrompt(e) {
   e.preventDefault();
   const body = {
@@ -95,7 +142,7 @@ document.getElementById("delete-prompt").onclick = async () => {
   else document.getElementById("flash").textContent = (await res.json()).error ?? "Delete failed";
 };` : ""}
 </script>`;
-  return page(p ? "Edit prompt" : "New prompt", body);
+  return page(p ? "Edit prompt" : "New prompt", body, { shell });
 }
 
 type PromptBody = {
