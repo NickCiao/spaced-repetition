@@ -3,7 +3,7 @@
 Single-user spaced-repetition app: capture → refine → review → export/import refactor.
 
 **Docs** (table of contents):
-- Design docs → `docs/design/YYYY-MM-DD-topic.md` — authoritative
+- Design docs → `docs/design/YYYY-MM-DD-topic.md` — authoritative (self-host: `2026-08-24-self-host-setup.md`)
 - Implementation docs → `docs/impl/` — historical how-to; prefer design doc when they disagree
 - Project Intent + core workflows + operator runbook → `README.md` — update it only when those change.
 - When product behaviour changes, update the relevant design docs (or write a new one).
@@ -22,7 +22,7 @@ Single-user spaced-repetition app: capture → refine → review → export/impo
 - Import: dry-run by default; reject whole zip on parse errors.
 - Runtime deps: `ts-fsrs`, `marked`, `katex`, `fflate` only. Ask before adding anything.
 
-**Dev:** `npm run migrate:local` · copy `.dev.vars.example` → `.dev.vars` · `npm run dev` · `/?token=devtoken` · ops scripts in README **Ops** table
+**Dev:** `npm run migrate:local` · copy `.dev.vars.example` → `.dev.vars` · `npm run dev` · `/?token=devtoken` · first-time prod: `npm run setup` or Deploy to Cloudflare button · ops in README
 **Test:** `npm test`. Route tests use `exports.default.fetch` + `AUTH` from `test/routes.test.ts`.
 
-**When changing:** new routes → `src/routes/` + wire `index.ts` + test. Schema → new `migrations/` file. Use `escapeHtml()`, parameterized SQL, `nowIso()` for timestamps.
+**When changing:** new routes → `src/routes/` + wire `index.ts` + test. Schema → new `migrations/` file. Use `escapeHtml()`, parameterized SQL, `nowIso()` for timestamps. Deploy script must keep remote migrations on the D1 **binding** name (`DB`) so the Deploy to Cloudflare button works when users rename the database.

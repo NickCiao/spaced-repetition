@@ -4,16 +4,24 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --test-scheduled",
-    "deploy": "wrangler deploy",
-    "deploy:safe": "npm test && wrangler deploy",
-    "migrate:local": "wrangler d1 migrations apply sr --local",
-    "migrate:remote": "wrangler d1 migrations apply sr --remote",
+    "setup": "node scripts/setup.mjs",
+    "deploy": "npm run migrate:remote && wrangler deploy",
+    "deploy:safe": "npm test && npm run deploy",
+    "migrate:local": "wrangler d1 migrations apply DB --local",
+    "migrate:remote": "wrangler d1 migrations apply DB --remote",
     "db:wipe:local": "bash scripts/db-wipe-local.sh",
     "db:wipe:remote": "bash scripts/db-wipe-remote.sh",
     "test": "vitest run",
     "types": "wrangler types",
     "vendor:static": "node scripts/vendor-static.mjs",
     "postinstall": "npm run vendor:static"
+  },
+  "cloudflare": {
+    "bindings": {
+      "SR_TOKEN": {
+        "description": "Long random auth token for your private instance. Generate with `openssl rand -hex 32`. After deploy, open `/?token=YOUR_TOKEN` once to set the cookie. Reminder email is configured later in **Settings** (not required to deploy)."
+      }
+    }
   },
   "dependencies": {
     "fflate": "^0.8.2",

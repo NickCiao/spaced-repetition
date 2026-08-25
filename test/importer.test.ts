@@ -39,6 +39,10 @@ describe("export / import / restore", () => {
     expect(names.some(n => n.startsWith("prompts/") && n.endsWith(".md"))).toBe(true);
     expect(names).toContain("log/reviews.jsonl");
     expect(names).toContain("settings.json");
+    const settings = JSON.parse(strFromU8(files["settings.json"]));
+    expect(settings).not.toHaveProperty("resend_api_key");
+    expect(settings).not.toHaveProperty("base_url");
+    expect(settings).not.toHaveProperty("resend_key_set");
 
     const dry = await post("/import?apply=0", zipSync(files));
     expect(dry.status).toBe(200);

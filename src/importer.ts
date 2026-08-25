@@ -379,7 +379,7 @@ export async function restoreFromZip(
 
     if (files["settings.json"]) {
       const s = JSON.parse(strFromU8(files["settings.json"])) as Record<string, unknown>;
-      for (const k of ["session_cap", "desired_retention", "email_hour", "timezone"]) {
+      for (const k of ["session_cap", "desired_retention", "email_hour", "timezone", "email_to"]) {
         if (s[k] !== undefined) {
           await env.DB.prepare(
             "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"

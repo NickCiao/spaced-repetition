@@ -175,11 +175,31 @@ export function composeReminder(
   return { subject, html };
 }
 
-async function sendReminder(env: Env, subject: string, html: string): Promise<void> {
+/** Resolve mail config: D1 Settings win; optional Worker secrets / .dev.vars remain as fallback. */
+export async function resolveMailConfig(env: Env): Promise<{
+  emailTo: string;
+  resendKey: string;
+  baseUrl: string;
+  emailFrom: string;
+}> {
+  const s = await getSettings(env.DB);
+  const storedKey = (await getSetting(env.DB, "resend_api_key")) ?? "";
+  return {
+    emailTo: s.email_to || env.EMAIL_TO || "",
+    resendKey: storedKey || env.RESEND_API_KEY || "",
+    baseUrl: s.base_url || env.BASE_URL || "",
+    emailFrom: env.EMAIL_FROM
+  };
+}
+
+async function sendReminder(
+  env: Env, mail: { emailTo: string; resendKey: string; emailFrom: string },
+  subject: string, html: string
+): Promise<void> {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: env.EMAIL_FROM, to: env.EMAIL_TO, subject, html })
+    headers: { Authorization: `Bearer ${mail.resendKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: mail.emailFrom, to: mail.emailTo, subject, html })
   });
   if (!res.ok) throw new Error(`resend ${res.status}: ${await res.text()}`);
 }
@@ -212,8 +232,18 @@ export async function runReminderCron(env: Env, now: Date): Promise<void> {
     send: { send: d.send, reason: d.reason, mode: d.cadence.mode, unanswered: d.cadence.unanswered }
   }));
   if (d.send && session.ready) {
-    const { subject, html } = composeReminder(session.dueCount, env.BASE_URL, session.reason);
-    await sendReminder(env, subject, html);
+    const mail = await resolveMailConfig(env);
+    if (!mail.emailTo || !mail.resendKey || !mail.baseUrl) {
+      console.log(JSON.stringify({
+        reminder: "skipped-missing-mail-config",
+        hasEmailTo: Boolean(mail.emailTo),
+        hasResendKey: Boolean(mail.resendKey),
+        hasBaseUrl: Boolean(mail.baseUrl)
+      }));
+    } else {
+      const { subject, html } = composeReminder(session.dueCount, mail.baseUrl, session.reason);
+      await sendReminder(env, mail, subject, html);
+    }
   }
   await setSetting(env.DB, "cadence", JSON.stringify(d.cadence));
 }

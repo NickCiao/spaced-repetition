@@ -5,6 +5,9 @@ import { escapeHtml, page, shellFor } from "../html";
 export async function settingsPage(env: Env): Promise<Response> {
   const s = await getSettings(env.DB);
   const shell = await shellFor(env.DB, "settings");
+  const keyHint = s.resend_key_set
+    ? "Key is set — leave blank to keep, or paste a new one to replace."
+    : "From resend.com (free tier). Reminders stay off until this and Email to are set.";
   const body = `
 <h1 class="page-title">Settings</h1>
 <form id="settings-form" class="form">
@@ -18,8 +21,14 @@ export async function settingsPage(env: Env): Promise<Response> {
     <div class="field"><label for="email_hour">Hour (0–23, local)</label><input class="input" type="text" id="email_hour" value="${s.email_hour}"></div>
     <div class="field"><label for="timezone">Timezone</label><input class="input" type="text" id="timezone" value="${escapeHtml(s.timezone)}"></div>
   </div>
+  <div class="form-grid">
+    <div class="field"><label for="email_to">Email to</label><input class="input" type="email" id="email_to" value="${escapeHtml(s.email_to)}" placeholder="you@example.com" autocomplete="email"></div>
+    <div class="field"><label for="resend_api_key">Resend API key</label><input class="input" type="password" id="resend_api_key" value="" placeholder="${s.resend_key_set ? "••••••••" : "re_…"}" autocomplete="off"><p class="field-hint">${keyHint}</p></div>
+  </div>
+  <div class="field"><label for="base_url">App URL</label><input class="input" type="url" id="base_url" value="${escapeHtml(s.base_url)}" placeholder="https://…workers.dev"><p class="field-hint">Auto-filled on first visit; override if you use a custom domain. Used as the link in reminder emails.</p></div>
   <div class="form-actions">
     <button type="submit" class="btn btn-primary">Save</button>
+    <button type="button" class="btn btn-ghost" id="clear-resend" ${s.resend_key_set ? "" : "hidden"}>Clear API key</button>
     <span class="flash" id="flash"></span>
   </div>
 </form>
@@ -71,9 +80,26 @@ export async function settingsPage(env: Env): Promise<Response> {
   return page("Settings", body, { script: "/static/settings.js", shell });
 }
 
+function isHttpUrl(s: string): boolean {
+  try {
+    const u = new URL(s);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export async function settingsApi(request: Request, env: Env): Promise<Response> {
-  const b = await request.json<{ session_cap?: number; desired_retention?: number; email_hour?: number; timezone?: string }>()
-    .catch(() => null);
+  const b = await request.json<{
+    session_cap?: number;
+    desired_retention?: number;
+    email_hour?: number;
+    timezone?: string;
+    email_to?: string;
+    resend_api_key?: string;
+    clear_resend_api_key?: boolean;
+    base_url?: string;
+  }>().catch(() => null);
   if (!b) return Response.json({ error: "bad body" }, { status: 400 });
   if (!Number.isInteger(b.session_cap) || b.session_cap! < 1 || b.session_cap! > 100)
     return Response.json({ error: "session_cap must be an integer 1–100" }, { status: 400 });
@@ -82,13 +108,30 @@ export async function settingsApi(request: Request, env: Env): Promise<Response>
   if (!Number.isInteger(b.email_hour) || b.email_hour! < 0 || b.email_hour! > 23)
     return Response.json({ error: "email_hour must be 0–23" }, { status: 400 });
   if (typeof b.timezone !== "string" || !b.timezone.trim())
-    return Response.json({ error: "timezone required" }, { status: 400 }); // undefined never throws in Intl
+    return Response.json({ error: "timezone required" }, { status: 400 });
   try { new Intl.DateTimeFormat("en-US", { timeZone: b.timezone }); }
   catch { return Response.json({ error: "unknown timezone" }, { status: 400 }); }
+
+  const emailTo = typeof b.email_to === "string" ? b.email_to.trim() : "";
+  if (emailTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTo))
+    return Response.json({ error: "email_to looks invalid" }, { status: 400 });
+
+  const baseUrl = typeof b.base_url === "string" ? b.base_url.trim().replace(/\/$/, "") : "";
+  if (baseUrl && !isHttpUrl(baseUrl))
+    return Response.json({ error: "base_url must be an http(s) URL" }, { status: 400 });
 
   await setSetting(env.DB, "session_cap", String(b.session_cap));
   await setSetting(env.DB, "desired_retention", String(b.desired_retention));
   await setSetting(env.DB, "email_hour", String(b.email_hour));
   await setSetting(env.DB, "timezone", b.timezone!);
+  await setSetting(env.DB, "email_to", emailTo);
+  await setSetting(env.DB, "base_url", baseUrl);
+
+  if (b.clear_resend_api_key) {
+    await setSetting(env.DB, "resend_api_key", "");
+  } else if (typeof b.resend_api_key === "string" && b.resend_api_key.trim()) {
+    await setSetting(env.DB, "resend_api_key", b.resend_api_key.trim());
+  }
+
   return Response.json({ ok: true });
 }

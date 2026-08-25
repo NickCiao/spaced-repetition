@@ -1,5 +1,6 @@
 import type { Env } from "./env.d";
 import { requireAuth } from "./auth";
+import { rememberBaseUrl } from "./db";
 import { gradeApi, reviewPage } from "./routes/review";
 import { captureApi, capturePage, capturesToday, sourcesApi } from "./routes/capture";
 import { serveAsset, uploadAsset } from "./routes/assets";
@@ -12,7 +13,11 @@ import { runReminderCron } from "./email";
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const denied = requireAuth(request, env);
-    if (denied) return denied;
+    if (denied) {
+      // Successful ?token=… redirect: learn the public origin while we still have the request.
+      if (denied.status === 302) ctx.waitUntil(rememberBaseUrl(env.DB, request.url));
+      return denied;
+    }
     const url = new URL(request.url);
     if (url.pathname === "/health") return Response.json({ ok: true });
     // The assets layer serves these before the worker runs in production; serving them here
@@ -21,6 +26,9 @@ export default {
       return env.ASSETS.fetch(new Request(new URL("/static/favicon.svg", url), request));
     }
     if (request.method === "GET" && /^\/(sw\.js$|static\/)/.test(url.pathname)) return env.ASSETS.fetch(request);
+
+    ctx.waitUntil(rememberBaseUrl(env.DB, request.url));
+
     if (url.pathname === "/" && request.method === "GET") return reviewPage(request, env);
     if (url.pathname === "/api/grade" && request.method === "POST") return gradeApi(request, env);
     if (url.pathname === "/capture" && request.method === "GET") return capturePage(env);

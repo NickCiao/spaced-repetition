@@ -237,6 +237,9 @@ describe("scheduled handler", () => {
     await setSetting(env.DB, "session_cap", "20");
     await setSetting(env.DB, "desired_retention", "0.9");
     await setSetting(env.DB, "cadence", JSON.stringify(base));
+    await setSetting(env.DB, "email_to", "you@example.com");
+    await setSetting(env.DB, "resend_api_key", "test-key");
+    await setSetting(env.DB, "base_url", "https://sr.example");
   }
 
   async function runCron(now: string) {
@@ -291,6 +294,29 @@ describe("scheduled handler", () => {
       expect(cadence.last_sent).toBeNull();
     } finally {
       await unseed("cronsrc002");
+      await pinSettings("America/Los_Angeles", "7");
+    }
+  });
+
+  it("skips Resend when mail settings are unset", async () => {
+    const now = "2026-08-21T09:05:00Z";
+    const t = at(now);
+    try {
+      await pinSettings("UTC", "9");
+      await setSetting(env.DB, "email_to", "");
+      await setSetting(env.DB, "resend_api_key", "");
+      await setSetting(env.DB, "base_url", "");
+      // Clear any legacy .dev.vars fallbacks loaded into the test env.
+      (env as { EMAIL_TO?: string }).EMAIL_TO = undefined;
+      (env as { RESEND_API_KEY?: string }).RESEND_API_KEY = undefined;
+      (env as { BASE_URL?: string }).BASE_URL = undefined;
+      await seed("cronsrc003", [
+        { id: "cronpmt201", f: learned(days(-8, t), 1, days(-9, t)) }
+      ], now);
+      await runCron(now);
+      expect(sent).toHaveLength(0);
+    } finally {
+      await unseed("cronsrc003");
       await pinSettings("America/Los_Angeles", "7");
     }
   });

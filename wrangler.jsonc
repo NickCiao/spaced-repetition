@@ -6,6 +6,8 @@
 		"directory": "./public",
 		"binding": "ASSETS"
 	},
+	// database_id is this template's default; Deploy to Cloudflare / `npm run setup`
+	// provision a fresh D1 and rewrite this field for each new account.
 	"d1_databases": [
 		{
 			"binding": "DB",

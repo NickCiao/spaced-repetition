@@ -275,15 +275,46 @@ describe("browse, prompt edit, settings", () => {
   });
 
   it("settings round-trip and validation", async () => {
-    const ok = await POST("/api/settings", { session_cap: 25, desired_retention: 0.85, email_hour: 8, timezone: "America/New_York" });
+    const ok = await POST("/api/settings", {
+      session_cap: 25, desired_retention: 0.85, email_hour: 8, timezone: "America/New_York",
+      email_to: "me@example.com", base_url: "https://sr.example"
+    });
     expect(ok.status).toBe(200);
     const html = await (await exports.default.fetch("http://sr/settings", AUTH)).text();
     expect(html).toContain("25");
+    expect(html).toContain("me@example.com");
+    expect(html).toContain("https://sr.example");
     expect((await POST("/api/settings", { session_cap: 0, desired_retention: 0.9, email_hour: 7, timezone: "America/New_York" })).status).toBe(400);
     expect((await POST("/api/settings", { session_cap: 20, desired_retention: 0.5, email_hour: 7, timezone: "America/New_York" })).status).toBe(400);
     expect((await POST("/api/settings", { session_cap: 20, desired_retention: 0.9, email_hour: 7, timezone: "Not/AZone" })).status).toBe(400);
+    expect((await POST("/api/settings", {
+      session_cap: 20, desired_retention: 0.9, email_hour: 7, timezone: "America/Los_Angeles",
+      email_to: "not-an-email"
+    })).status).toBe(400);
     // restore defaults for other tests
-    await POST("/api/settings", { session_cap: 20, desired_retention: 0.9, email_hour: 7, timezone: "America/Los_Angeles" });
+    await POST("/api/settings", {
+      session_cap: 20, desired_retention: 0.9, email_hour: 7, timezone: "America/Los_Angeles",
+      email_to: "", base_url: ""
+    });
+  });
+
+  it("resend api key set/clear without echoing the secret", async () => {
+    const set = await POST("/api/settings", {
+      session_cap: 20, desired_retention: 0.9, email_hour: 7, timezone: "America/Los_Angeles",
+      resend_api_key: "re_test_secret"
+    });
+    expect(set.status).toBe(200);
+    const html = await (await exports.default.fetch("http://sr/settings", AUTH)).text();
+    expect(html).not.toContain("re_test_secret");
+    expect(html).toContain("Key is set");
+    const key = await env.DB.prepare("SELECT value FROM settings WHERE key = 'resend_api_key'").first<{ value: string }>();
+    expect(key?.value).toBe("re_test_secret");
+    await POST("/api/settings", {
+      session_cap: 20, desired_retention: 0.9, email_hour: 7, timezone: "America/Los_Angeles",
+      clear_resend_api_key: true
+    });
+    const cleared = await env.DB.prepare("SELECT value FROM settings WHERE key = 'resend_api_key'").first<{ value: string }>();
+    expect(cleared?.value).toBe("");
   });
 
   it("prompt/new rejects malformed or unknown source ids", async () => {

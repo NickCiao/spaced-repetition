@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { getSetting, getSettings, newId, setSetting } from "../src/db";
+import { getSetting, getSettings, newId, rememberBaseUrl, setSetting } from "../src/db";
 
 describe("db", () => {
   it("seeds default settings", async () => {
@@ -9,8 +9,20 @@ describe("db", () => {
       session_cap: 20,
       desired_retention: 0.9,
       email_hour: 7,
-      timezone: "America/Los_Angeles"
+      timezone: "America/Los_Angeles",
+      email_to: "",
+      base_url: "",
+      resend_key_set: false
     });
+  });
+
+  it("rememberBaseUrl records origin once", async () => {
+    await setSetting(env.DB, "base_url", "");
+    await rememberBaseUrl(env.DB, "https://sr.example/settings");
+    expect(await getSetting(env.DB, "base_url")).toBe("https://sr.example");
+    await rememberBaseUrl(env.DB, "https://other.example/");
+    expect(await getSetting(env.DB, "base_url")).toBe("https://sr.example");
+    await setSetting(env.DB, "base_url", "");
   });
 
   it("set/get setting round-trips", async () => {

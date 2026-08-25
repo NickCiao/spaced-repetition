@@ -42,13 +42,52 @@ export async function setSetting(db: D1Database, key: string, value: string): Pr
   ).bind(key, value).run();
 }
 
-export async function getSettings(db: D1Database) {
+export type AppSettings = {
+  session_cap: number;
+  desired_retention: number;
+  email_hour: number;
+  timezone: string;
+  email_to: string;
+  base_url: string;
+  /** True when a Resend API key is stored in D1 (value never returned). */
+  resend_key_set: boolean;
+};
+
+/** Scheduler / reminder fields safe to put in export.zip (no secrets, no host URL). */
+export function exportableSettings(s: AppSettings): Record<string, string | number> {
+  const out: Record<string, string | number> = {
+    session_cap: s.session_cap,
+    desired_retention: s.desired_retention,
+    email_hour: s.email_hour,
+    timezone: s.timezone
+  };
+  if (s.email_to) out.email_to = s.email_to;
+  return out;
+}
+
+export async function getSettings(db: D1Database): Promise<AppSettings> {
   const rows = await db.prepare("SELECT key, value FROM settings").all<{ key: string; value: string }>();
   const map = new Map(rows.results.map(r => [r.key, r.value]));
+  const resend = map.get("resend_api_key") ?? "";
   return {
     session_cap: parseInt(map.get("session_cap") ?? "20", 10),
     desired_retention: parseFloat(map.get("desired_retention") ?? "0.9"),
     email_hour: parseInt(map.get("email_hour") ?? "7", 10),
-    timezone: map.get("timezone") ?? "America/Los_Angeles"
+    timezone: map.get("timezone") ?? "America/Los_Angeles",
+    email_to: map.get("email_to") ?? "",
+    base_url: map.get("base_url") ?? "",
+    resend_key_set: resend.length > 0
   };
+}
+
+/** Record the request origin once so reminder emails have a link target without a deploy secret. */
+export async function rememberBaseUrl(db: D1Database, requestUrl: string): Promise<void> {
+  const existing = await getSetting(db, "base_url");
+  if (existing) return;
+  try {
+    const origin = new URL(requestUrl).origin;
+    if (origin.startsWith("http://") || origin.startsWith("https://")) {
+      await setSetting(db, "base_url", origin);
+    }
+  } catch { /* ignore bad URLs */ }
 }

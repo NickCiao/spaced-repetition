@@ -20,52 +20,42 @@ At a high level, this project is one Cloudflare Worker with a few companion surf
 - Refinement of captured context into retrieval prompts should be meaningfully effortful.
 
 
+## Deploy your own
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/NickCiao/spaced-repetition)
+
+That provisions D1 + R2, runs database migrations, and prompts for `SR_TOKEN`. Then open `https://<your-worker>/?token=<SR_TOKEN>` once; the cookie handles auth in the future.
+
+**Or from a clone:**
+
+```bash
+npm install
+npm run setup    # login → D1/R2 → migrate → SR_TOKEN → deploy
+```
+
+Email is configured in **Settings** after deploy (Resend API key + destination). `EMAIL_FROM` defaults to Resend’s test sender (`onboarding@resend.dev`); you can override this by running `npx wrangler secret put EMAIL_FROM` (after verifying the domain in Resend).
+
+On the phone: open `/capture`, then Share → Add to Home Screen.
+
 ## Ops
 
 | Command | What |
 |---------|------|
+| `npm run setup` | First-time production: D1, R2, migrations, `SR_TOKEN`, deploy |
 | `npm run dev` | Local dev server (`http://localhost:8787/?token=devtoken`) |
 | `npm test` | Test suite |
 | `npm run migrate:local` | Apply D1 migrations locally |
 | `npm run migrate:remote` | Apply D1 migrations to production |
-| `npm run deploy` | Deploy worker code (secrets unchanged) |
+| `npm run deploy` | Migrate remote + deploy worker (secrets unchanged) |
 | `npm run deploy:safe` | `npm test` then deploy |
 | `npm run db:wipe:local` | Wipe local D1/R2 state and re-migrate |
 | `CONFIRM=yes npm run db:wipe:remote` | Wipe production D1 + R2 (see below). Optional: `WIPE_SETTINGS=yes` clears settings. |
-
-## First-time production deploy
-
-```bash
-npm install
-npx wrangler login
-
-# Create backing stores. Enable R2 in the dashboard first if bucket create fails with code 10042.
-npx wrangler d1 create sr             # paste database_id into wrangler.jsonc
-npx wrangler r2 bucket create sr-assets
-# If Wrangler offers to edit wrangler.jsonc after either command, decline — bindings are already configured.
-
-npm run migrate:remote
-
-openssl rand -hex 32 | npx wrangler secret put SR_TOKEN
-npx wrangler secret put RESEND_API_KEY   # from resend.com (free tier)
-npx wrangler secret put EMAIL_TO
-npx wrangler secret put BASE_URL         # https://<your-worker>.workers.dev (printed at end of deploy)
-
-npm run deploy
-curl https://<your-worker>/health        # {"ok":true}
-```
-
-`EMAIL_TO` and `BASE_URL` are secrets only (not in `wrangler.jsonc`), so redeploying won't overwrite them.
-`EMAIL_FROM` defaults to `onboarding@resend.dev` in `wrangler.jsonc` — Resend's test sender, which only delivers to the address on your Resend account. For production, verify your own domain in Resend and `npx wrangler secret put EMAIL_FROM`.
-
-Open `https://<your-worker>/?token=<SR_TOKEN>` once per browser; the cookie does the rest.
-On the phone: open `/capture`, then Share → Add to Home Screen.
 
 ## Local dev
 
 ```bash
 npm install
-cp .dev.vars.example .dev.vars   # RESEND_API_KEY and EMAIL_TO required for real sends; SR_TOKEN and BASE_URL are preset
+cp .dev.vars.example .dev.vars   # SR_TOKEN preset; optional RESEND_* for local sends without Settings
 npm run migrate:local
 npm run dev
 npm test
@@ -76,8 +66,6 @@ npm test
 ```bash
 curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
 ```
-
-The server log prints the decision, e.g. `{"reminder":"fuller-session-soon","ready":false,"due":2,"send":false}`. An email is only attempted at the hour set in Settings, and only sends with a real `RESEND_API_KEY` plus `EMAIL_TO` (and `EMAIL_FROM` from `wrangler.jsonc` unless overridden in `.dev.vars`).
 
 ## iOS share-sheet Shortcut
 
@@ -140,6 +128,3 @@ https://gwern.net/spaced-repetition
 https://withorbit.com/
 
 https://github.com/andymatuschak/orbit
-
-
-

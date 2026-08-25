@@ -245,13 +245,41 @@
       desired_retention: parseFloat(document.getElementById("desired_retention").value),
       email_hour: parseInt(document.getElementById("email_hour").value, 10),
       timezone: document.getElementById("timezone").value.trim(),
+      email_to: document.getElementById("email_to").value.trim(),
+      base_url: document.getElementById("base_url").value.trim(),
+      resend_api_key: document.getElementById("resend_api_key").value,
     };
     const res = await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    document.getElementById("flash").textContent = res.ok ? "Saved ✓" : (await res.json()).error;
+    const flash = document.getElementById("flash");
+    if (res.ok) {
+      flash.textContent = "Saved ✓";
+      location.reload();
+    } else {
+      flash.textContent = (await res.json()).error;
+    }
+  });
+
+  document.getElementById("clear-resend").addEventListener("click", async () => {
+    const body = {
+      session_cap: parseInt(document.getElementById("session_cap").value, 10),
+      desired_retention: parseFloat(document.getElementById("desired_retention").value),
+      email_hour: parseInt(document.getElementById("email_hour").value, 10),
+      timezone: document.getElementById("timezone").value.trim(),
+      email_to: document.getElementById("email_to").value.trim(),
+      base_url: document.getElementById("base_url").value.trim(),
+      clear_resend_api_key: true,
+    };
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    document.getElementById("flash").textContent = res.ok ? "API key cleared" : (await res.json()).error;
+    if (res.ok) location.reload();
   });
 
   document.getElementById("import-form").addEventListener("submit", async (e) => {

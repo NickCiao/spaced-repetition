@@ -2,7 +2,7 @@ import { zipSync, strToU8 } from "fflate";
 import type { Env } from "./env.d";
 import type { CaptureRow, EventRow, PromptRow, SourceRow } from "./db";
 import { renderSourceFile, sourceFileName } from "./format";
-import { getSettings } from "./db";
+import { exportableSettings, getSettings } from "./db";
 
 export async function buildExportZip(env: Env): Promise<Uint8Array> {
   const files: Record<string, Uint8Array> = {};
@@ -56,6 +56,6 @@ export async function buildExportZip(env: Env): Promise<Uint8Array> {
   }
   files["assets/index.json"] = strToU8(JSON.stringify(index, null, 2));
 
-  files["settings.json"] = strToU8(JSON.stringify(await getSettings(env.DB), null, 2));
+  files["settings.json"] = strToU8(JSON.stringify(exportableSettings(await getSettings(env.DB)), null, 2));
   return zipSync(files);
 }
