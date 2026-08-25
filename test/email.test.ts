@@ -140,21 +140,24 @@ describe("decideReminder (pure)", () => {
 
   it("sends at the configured local hour when a session is ready", () => {
     const d = decideReminder({ now: seven, tz, hour: 7, ready: true, cadence: base, lastReviewAt: null });
-    expect(d.send).toBe(true);
+    expect(d).toMatchObject({ send: true, reason: "sent" });
     expect(d.cadence.unanswered).toBe(1);
   });
 
   it("does not send off-hour, when no session is ready, or twice in a day", () => {
-    expect(decideReminder({ now: at("2026-08-20T15:00:00Z"), tz, hour: 7, ready: true, cadence: base, lastReviewAt: null }).send).toBe(false);
-    expect(decideReminder({ now: seven, tz, hour: 7, ready: false, cadence: base, lastReviewAt: null }).send).toBe(false);
+    expect(decideReminder({ now: at("2026-08-20T15:00:00Z"), tz, hour: 7, ready: true, cadence: base, lastReviewAt: null }))
+      .toMatchObject({ send: false, reason: "wrong-hour" });
+    expect(decideReminder({ now: seven, tz, hour: 7, ready: false, cadence: base, lastReviewAt: null }))
+      .toMatchObject({ send: false, reason: "not-ready" });
     const already = { ...base, last_sent: "2026-08-20T14:00:00Z" };
-    expect(decideReminder({ now: at("2026-08-20T14:59:00Z"), tz, hour: 7, ready: true, cadence: already, lastReviewAt: null }).send).toBe(false);
+    expect(decideReminder({ now: at("2026-08-20T14:59:00Z"), tz, hour: 7, ready: true, cadence: already, lastReviewAt: null }))
+      .toMatchObject({ send: false, reason: "already-sent-today" });
   });
 
   it("4 unanswered dailies decay to weekly; weekly waits 7 days", () => {
     let c: CadenceState = { unanswered: 3, mode: "daily", last_sent: "2026-08-19T14:00:00Z" };
     const d = decideReminder({ now: seven, tz, hour: 7, ready: true, cadence: c, lastReviewAt: "2026-08-10T00:00:00Z" });
-    expect(d.send).toBe(true);
+    expect(d).toMatchObject({ send: true, reason: "sent" });
     expect(d.cadence.mode).toBe("weekly");
     expect(d.cadence.unanswered).toBe(4);
 
@@ -162,19 +165,19 @@ describe("decideReminder (pure)", () => {
       now: at("2026-08-22T14:00:00Z"), tz, hour: 7, ready: true,
       cadence: d.cadence, lastReviewAt: "2026-08-10T00:00:00Z"
     });
-    expect(tooSoon.send).toBe(false);
+    expect(tooSoon).toMatchObject({ send: false, reason: "weekly-cooldown" });
 
     const weekLater = decideReminder({
       now: at("2026-08-27T14:00:00Z"), tz, hour: 7, ready: true,
       cadence: d.cadence, lastReviewAt: "2026-08-10T00:00:00Z"
     });
-    expect(weekLater.send).toBe(true);
+    expect(weekLater).toMatchObject({ send: true, reason: "sent" });
   });
 
   it("a review since last send resets to daily", () => {
     const c: CadenceState = { unanswered: 4, mode: "weekly", last_sent: "2026-08-19T14:00:00Z" };
     const d = decideReminder({ now: seven, tz, hour: 7, ready: true, cadence: c, lastReviewAt: "2026-08-19T20:00:00Z" });
-    expect(d.send).toBe(true);
+    expect(d).toMatchObject({ send: true, reason: "sent" });
     expect(d.cadence.mode).toBe("daily");
     expect(d.cadence.unanswered).toBe(1);
   });

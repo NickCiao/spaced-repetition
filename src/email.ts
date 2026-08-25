@@ -92,27 +92,35 @@ export function sessionReady(a: {
   return { ready: true, reason: "no-better-session-soon", dueCount: due.length };
 }
 
+export type ReminderSendReason =
+  | "sent"
+  | "not-ready"
+  | "wrong-hour"
+  | "already-sent-today"
+  | "weekly-cooldown";
+
 export function decideReminder(a: {
   now: Date; tz: string; hour: number; ready: boolean;
   cadence: CadenceState; lastReviewAt: string | null;
-}): { send: boolean; cadence: CadenceState } {
+}): { send: boolean; reason: ReminderSendReason; cadence: CadenceState } {
   let c = { ...a.cadence };
 
   const reviewedSinceLastSend =
     c.last_sent !== null && a.lastReviewAt !== null && a.lastReviewAt > c.last_sent;
   if (reviewedSinceLastSend) c = { ...c, unanswered: 0, mode: "daily" };
 
-  if (!a.ready) return { send: false, cadence: c };
-  if (localHour(a.now, a.tz) !== a.hour) return { send: false, cadence: c };
+  if (!a.ready) return { send: false, reason: "not-ready", cadence: c };
+  if (localHour(a.now, a.tz) !== a.hour) return { send: false, reason: "wrong-hour", cadence: c };
   if (c.last_sent && localDate(new Date(c.last_sent), a.tz) === localDate(a.now, a.tz))
-    return { send: false, cadence: c };
+    return { send: false, reason: "already-sent-today", cadence: c };
   if (c.mode === "weekly" && c.last_sent &&
       a.now.getTime() - new Date(c.last_sent).getTime() < 7 * 86400_000)
-    return { send: false, cadence: c };
+    return { send: false, reason: "weekly-cooldown", cadence: c };
 
   const unanswered = c.unanswered + 1;
   return {
     send: true,
+    reason: "sent",
     cadence: {
       unanswered,
       mode: unanswered >= 4 ? "weekly" : c.mode,
@@ -199,7 +207,10 @@ export async function runReminderCron(env: Env, now: Date): Promise<void> {
     now, tz: s.timezone, hour: s.email_hour, ready: session.ready,
     cadence, lastReviewAt: lastReview?.t ?? null
   });
-  console.log(JSON.stringify({ reminder: session.reason, ready: session.ready, due: session.dueCount, send: d.send }));
+  console.log(JSON.stringify({
+    session: { ready: session.ready, reason: session.reason, due: session.dueCount },
+    send: { send: d.send, reason: d.reason, mode: d.cadence.mode, unanswered: d.cadence.unanswered }
+  }));
   if (d.send && session.ready) {
     const { subject, html } = composeReminder(session.dueCount, env.BASE_URL, session.reason);
     await sendReminder(env, subject, html);
