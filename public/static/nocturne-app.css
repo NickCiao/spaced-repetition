@@ -170,10 +170,13 @@ button.seg-opt { background: none; border: 0; color: inherit; font: inherit; }
 
 /* ── source detail ─────────────────────────────────────────────────── */
 .source-title { margin-bottom: 2px; }
-.source-url { margin: 0 0 var(--space-6); font-size: 13px; }
+.source-url { margin: 0; font-size: 13px; }
 .source-url a { color: color-mix(in srgb, var(--color-text) 50%, transparent); }
 .source-url a:hover { color: var(--color-accent); }
-.source-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-6); }
+.source-actions {
+  display: flex; flex-wrap: wrap; gap: var(--space-2);
+  margin-top: var(--space-4); margin-bottom: var(--space-6);
+}
 
 /* ── settings: backup + import ─────────────────────────────────────── */
 .export-link { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); text-decoration: none; color: var(--color-text); }
