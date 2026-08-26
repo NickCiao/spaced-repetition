@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="432" height="432" role="img" aria-label="Icon background">
+  <defs>
+    <radialGradient id="bg" cx="30%" cy="20%" r="120%">
+      <stop offset="0" stop-color="#292b31"></stop>
+      <stop offset="1" stop-color="#161826"></stop>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" fill="url(#bg)"></rect>
+</svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Goldfish mark (mono)">
+  <defs>
+    <mask id="knock">
+      <rect width="64" height="64" fill="white"></rect>
+      <g transform="rotate(22 30 33)">
+        <circle cx="21" cy="29.5" r="3.2" fill="black"></circle>
+        <circle cx="14" cy="33.2" r="1" fill="black"></circle>
+      </g>
+    </mask>
+  </defs>
+  <path d="M6 41 H58" stroke="#9184d9" stroke-width="3" stroke-linecap="round"></path>
+  <g mask="url(#knock)">
+    <g transform="rotate(22 30 33)" fill="#9184d9">
+      <path d="M40 32 Q51 20 56 22.5 Q58.5 25 50.5 32.5 Q58.5 40 56 42.5 Q51 45 40 33.5 Z"></path>
+      <path d="M22.5 22.3 Q25.5 14.5 33.5 16.5 Q29.5 19.5 28.8 22.6 Z"></path>
+      <ellipse cx="28" cy="33" rx="14" ry="11.5"></ellipse>
+      <circle cx="13" cy="31.8" r="1.8"></circle>
+      <circle cx="13" cy="34.6" r="1.8"></circle>
+    </g>
+  </g>
+  <path d="M11 6.5 l2 4.9 4.9 2 -4.9 2 -2 4.9 -2 -4.9 -4.9 -2 4.9 -2 z" fill="#9184d9"></path>
+</svg>

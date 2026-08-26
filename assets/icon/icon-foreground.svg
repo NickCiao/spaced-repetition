@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="432" height="432" role="img" aria-label="Goldfish (adaptive foreground)">
+  <defs>
+    <linearGradient id="wl" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#b5abfc" stop-opacity="0"></stop>
+      <stop offset="0.1" stop-color="#b5abfc" stop-opacity="1"></stop>
+      <stop offset="0.9" stop-color="#b5abfc" stop-opacity="1"></stop>
+      <stop offset="1" stop-color="#b5abfc" stop-opacity="0"></stop>
+    </linearGradient>
+  </defs>
+  <g transform="translate(12.48 12.48) scale(0.61)">
+    <g transform="rotate(22 30 33)">
+      <path d="M40 32 Q51 20 56 22.5 Q58.5 25 50.5 32.5 Q58.5 40 56 42.5 Q51 45 40 33.5 Z" fill="#f9b970"></path>
+      <path d="M22.5 22.3 Q25.5 14.5 33.5 16.5 Q29.5 19.5 28.8 22.6 Z" fill="#f9b970"></path>
+      <ellipse cx="28" cy="33" rx="14" ry="11.5" fill="#f59a49"></ellipse>
+      <path d="M15.5 36 Q20 43.5 30 44 Q24 46.5 18.5 42 Q15.8 39 15.5 36 Z" fill="#ffd9a6" opacity="0.85"></path>
+      <path d="M29.5 41 Q35.5 42 36.5 47 Q30.5 47 27.8 44 Z" fill="#f9b970"></path>
+      <circle cx="21" cy="29.5" r="5.6" fill="#f6f0e4"></circle>
+      <circle cx="20" cy="31.3" r="2" fill="#201a2e"></circle>
+      <circle cx="20.9" cy="30.5" r="0.7" fill="#f6f0e4"></circle>
+      <circle cx="13" cy="31.8" r="1.8" fill="#ef8b3e"></circle>
+      <circle cx="13" cy="34.6" r="1.8" fill="#ef8b3e"></circle>
+      <circle cx="14" cy="33.2" r="0.9" fill="#7c431d"></circle>
+      <ellipse cx="17" cy="38.2" rx="2.5" ry="1.6" fill="#ffcf9e" opacity="0.6"></ellipse>
+    </g>
+  </g>
+  <rect x="0" y="37.5" width="64" height="26.5" fill="#2b2741" opacity="0.4"></rect>
+  <path d="M2 37.5 H62" fill="none" stroke="url(#wl)" stroke-width="1.4" stroke-linecap="round"></path>
+  <g transform="translate(12.48 12.48) scale(0.61)">
+    <path d="M11 6.5 l2 4.9 4.9 2 -4.9 2 -2 4.9 -2 -4.9 -4.9 -2 4.9 -2 z" fill="#e7e5fe"></path>
+    <circle cx="19" cy="6" r="1.2" fill="#b5abfc"></circle>
+  </g>
+</svg>

@@ -1,11 +1,15 @@
 {
-  "name": "Capture",
-  "short_name": "Capture",
+  "name": "Resurface",
+  "short_name": "Resurface",
   "start_url": "/capture",
   "display": "standalone",
   "background_color": "#161826",
   "theme_color": "#161826",
   "icons": [
-    { "src": "/static/favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" }
+    { "src": "/static/favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "/static/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "/static/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "/static/icon-maskable-192.png", "type": "image/png", "sizes": "192x192", "purpose": "maskable" },
+    { "src": "/static/icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
   ]
 }

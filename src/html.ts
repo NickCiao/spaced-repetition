@@ -8,7 +8,9 @@ export function escapeHtml(s: string): string {
 
 export type AppPage = "review" | "capture" | "inbox" | "browse" | "settings";
 
-const SYNAPSE = `<svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true"><circle cx="3.5" cy="7" r="2.2" fill="var(--color-accent)"/><line x1="5.8" y1="7" x2="8.2" y2="7" stroke="var(--color-accent)" stroke-width="1.4" stroke-linecap="round"/><circle cx="10.5" cy="7" r="2.2" fill="var(--color-accent)"/></svg>`;
+// Fish mono mark (see assets/icon/handoff.md). The eye knockout is faked with the
+// page bg colour; the standalone icon-mono.svg uses a real mask.
+const FISH_MARK = `<svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><path d="M6 41 H58" stroke="var(--color-accent)" stroke-width="3" stroke-linecap="round"/><g transform="rotate(22 30 33)" fill="var(--color-accent)"><path d="M40 32 Q51 20 56 22.5 Q58.5 25 50.5 32.5 Q58.5 40 56 42.5 Q51 45 40 33.5 Z"/><ellipse cx="28" cy="33" rx="14" ry="11.5"/><circle cx="21" cy="29.5" r="3.2" fill="#161826"/></g><path d="M11 6.5 l2 4.9 4.9 2 -4.9 2 -2 4.9 -2 -4.9 -4.9 -2 4.9 -2 z" fill="var(--color-accent)"/></svg>`;
 
 const NAV: { page: AppPage; href: string; label: string; icon: string }[] = [
   { page: "review", href: "/", label: "Review", icon: "ph-cards" },
@@ -31,7 +33,7 @@ export function shell(active: AppPage, dueCount: number, content: string): strin
   const railNav = NAV.map(n => navItem(n, active, dueCount, false)).join("\n    ");
   const tabNav = NAV.map(n => navItem(n, active, dueCount, true)).join("\n  ");
   return `<aside class="rail">
-  <div class="rail-brand">${SYNAPSE} Spaced repetition</div>
+  <div class="rail-brand">${FISH_MARK} Resurface</div>
   <nav class="rail-nav">
     ${railNav}
   </nav>
@@ -121,6 +123,7 @@ export function page(
 <title>${escapeHtml(title)}</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 ${styleLinks}
 ${opts.extraHead ?? ""}
 </head>

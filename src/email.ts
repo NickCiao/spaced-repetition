@@ -141,10 +141,16 @@ export function composeReminder(
   const subject = `${countLabel} · ~${mins} min`;
   const url = escapeHtml(baseUrl.replace(/\/$/, "") + "/");
   const reasonText = escapeHtml(reminderReasonText(reason));
-  const icon = `<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" style="display:block">
-    <circle cx="3.5" cy="7" r="2.2" fill="${NOCTURNE.accent}"/>
-    <line x1="5.8" y1="7" x2="8.2" y2="7" stroke="${NOCTURNE.accent}" stroke-width="1.4" stroke-linecap="round"/>
-    <circle cx="10.5" cy="7" r="2.2" fill="${NOCTURNE.accent}"/>
+  // Fish mono mark (see assets/icon/handoff.md); eye knockout faked with the card
+  // surface colour since email clients don't reliably support SVG masks.
+  const icon = `<svg width="14" height="14" viewBox="0 0 64 64" aria-hidden="true" style="display:block">
+    <path d="M6 41 H58" stroke="${NOCTURNE.accent}" stroke-width="3" stroke-linecap="round"/>
+    <g transform="rotate(22 30 33)" fill="${NOCTURNE.accent}">
+      <path d="M40 32 Q51 20 56 22.5 Q58.5 25 50.5 32.5 Q58.5 40 56 42.5 Q51 45 40 33.5 Z"/>
+      <ellipse cx="28" cy="33" rx="14" ry="11.5"/>
+      <circle cx="21" cy="29.5" r="3.2" fill="${NOCTURNE.surface}"/>
+    </g>
+    <path d="M11 6.5 l2 4.9 4.9 2 -4.9 2 -2 4.9 -2 -4.9 -4.9 -2 4.9 -2 z" fill="${NOCTURNE.accent}"/>
   </svg>`;
   const html = `<!doctype html>
 <html lang="en">
@@ -158,7 +164,7 @@ export function composeReminder(
   <div style="background:${NOCTURNE.surface};border-radius:8px;padding:22px 24px 20px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
       ${icon}
-      <span style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:${NOCTURNE.muted}">Spaced repetition</span>
+      <span style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:${NOCTURNE.muted}">Resurface</span>
     </div>
     <p style="margin:0 0 12px;font-size:28px;line-height:1.15;font-weight:500;letter-spacing:-0.015em">
       <span style="color:${NOCTURNE.text}">${escapeHtml(countLabel)}</span>
