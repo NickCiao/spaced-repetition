@@ -28,7 +28,6 @@ export async function capturePage(env: Env): Promise<Response> {
 <h6 class="kicker">Today <span class="count" id="today-count"></span></h6>
 <div class="rows" id="today"></div>`;
   return page("Capture", body, {
-    extraHead: `<link rel="manifest" href="/static/manifest.webmanifest" crossorigin="use-credentials">`,
     script: "/static/capture.js",
     shell
   });

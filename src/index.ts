@@ -23,7 +23,7 @@ export default {
     // The assets layer serves these before the worker runs in production; serving them here
     // too keeps the worker self-sufficient and its HTTP surface testable end to end.
     if (request.method === "GET" && url.pathname === "/favicon.ico") {
-      return env.ASSETS.fetch(new Request(new URL("/static/favicon.svg", url), request));
+      return env.ASSETS.fetch(new Request(new URL("/static/favicon-32.png", url), request));
     }
     if (request.method === "GET" && /^\/(sw\.js$|static\/)/.test(url.pathname)) return env.ASSETS.fetch(request);
 
