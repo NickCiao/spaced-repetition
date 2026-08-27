@@ -15,8 +15,87 @@ export async function browseIndex(env: Env): Promise<Response> {
       <span class="row-count">${r.n} prompts</span>
     </div>`
   ).join("") || "<p class='empty'>No sources yet.</p>";
-  const body = `<h1 class="page-title">Browse</h1><div class="rows">${list}</div>`;
+  // Names feed the duplicate hint client-side. \u003c-escaped so a source name
+  // containing "</script>" cannot break out of the inline script tag.
+  const names = JSON.stringify(rows.map(r => ({ id: r.id, name: r.name }))).replace(/</g, "\\u003c");
+  const body = `
+<div class="page-head">
+  <h1 class="page-title" style="margin:0">Browse</h1>
+  <button type="button" class="btn btn-secondary" id="new-source"><i class="ph ph-plus"></i> New source</button>
+</div>
+<div class="rows">
+  <div class="row row-create" id="create-row" hidden>
+    <div class="form-grid">
+      <div class="field">
+        <label for="ns-name">Name</label>
+        <input class="input" type="text" id="ns-name" placeholder="Book, article, podcast…" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="ns-url">URL <span class="note">— optional</span></label>
+        <input class="input" type="text" id="ns-url" placeholder="https://…" autocomplete="off">
+      </div>
+    </div>
+    <p class="field-hint" id="ns-hint" hidden></p>
+    <div class="form-actions" style="margin-top:0">
+      <button type="button" class="btn btn-primary" id="ns-create">Create</button>
+      <button type="button" class="btn btn-ghost" id="ns-cancel">Cancel</button>
+      <p class="flash" id="ns-flash"></p>
+    </div>
+  </div>
+  ${list}
+</div>
+<script>
+const SOURCES = ${names};
+const row = document.getElementById("create-row");
+const nameEl = document.getElementById("ns-name"), urlEl = document.getElementById("ns-url");
+const hint = document.getElementById("ns-hint"), flash = document.getElementById("ns-flash");
+function toggle(open) {
+  row.hidden = !open;
+  if (open) nameEl.focus();
+  else { nameEl.value = ""; urlEl.value = ""; flash.textContent = ""; hint.hidden = true; }
+}
+document.getElementById("new-source").onclick = () => toggle(row.hidden);
+document.getElementById("ns-cancel").onclick = () => toggle(false);
+nameEl.oninput = () => {
+  flash.textContent = "";
+  const dup = SOURCES.find(s => s.name.toLowerCase() === nameEl.value.trim().toLowerCase());
+  hint.hidden = !dup;
+  if (dup) hint.textContent = "\\u201C" + dup.name + "\\u201D already exists — Create will open it.";
+};
+async function create() {
+  const name = nameEl.value.trim();
+  if (!name) { flash.textContent = "source name required"; return; }
+  const res = await fetch("/api/source", { method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, url: urlEl.value.trim() || undefined }) });
+  if (!res.ok) { flash.textContent = (await res.json()).error; return; }
+  const body = await res.json();
+  location.href = body.existed ? "/browse/" + body.id : "/prompt/new?source=" + body.id;
+}
+document.getElementById("ns-create").onclick = create;
+[nameEl, urlEl].forEach(el => el.onkeydown = (e) => {
+  if (e.key === "Enter") { e.preventDefault(); create(); }
+  if (e.key === "Escape") toggle(false);
+});
+</script>`;
   return page("Browse", body, { shell });
+}
+
+type SourceBody = { name?: string; url?: string };
+
+export async function sourceApi(request: Request, env: Env): Promise<Response> {
+  const b = await request.json<SourceBody>().catch(() => null);
+  const name = b?.name?.trim();
+  if (!name) return Response.json({ error: "source name required" }, { status: 400 });
+  // Same dedupe as refineApi, but case-insensitive so "gwern" opens "Gwern"
+  // instead of creating a near-duplicate (matches the client-side hint).
+  const existing = await env.DB.prepare("SELECT id FROM sources WHERE name = ? COLLATE NOCASE")
+    .bind(name).first<SourceRow>();
+  if (existing) return Response.json({ ok: true, id: existing.id, existed: true });
+  const id = newId();
+  await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, ?, ?, '{}', ?)")
+    .bind(id, name, b?.url?.trim() || null, nowIso()).run();
+  return Response.json({ ok: true, id, existed: false });
 }
 
 export async function browseSource(sourceId: string, env: Env): Promise<Response> {
@@ -31,7 +110,8 @@ export async function browseSource(sourceId: string, env: Env): Promise<Response
       <div class="row-main"><div class="row-text"><a href="/prompt/${p.id}">${escapeHtml(p.question.slice(0, 120))}</a></div></div>
       ${p.flag_note ? '<span class="tag tag-outline">flagged</span>' : ""}
       ${p.retired ? '<span class="tag tag-neutral">retired</span>' : ""}
-    </div>`).join("") || "<p class='empty'>No prompts.</p>";
+    </div>`).join("") ||
+    `<p class='empty'>No prompts yet — add your first with <a href="/prompt/new?source=${src.id}">+ Prompt</a>.</p>`;
   const urlLine = src.url && /^https?:\/\//i.test(src.url)
     ? `<p class="source-url"><a href="${escapeHtml(src.url)}" target="_blank" rel="noopener">${escapeHtml(hostOnly(src.url))}</a></p>`
     : "";

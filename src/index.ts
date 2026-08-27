@@ -5,7 +5,7 @@ import { gradeApi, reviewPage } from "./routes/review";
 import { captureApi, capturePage, capturesToday, sourcesApi } from "./routes/capture";
 import { serveAsset, uploadAsset } from "./routes/assets";
 import { deleteCapture, inboxPage, previewApi, refineApi, refinePage } from "./routes/inbox";
-import { browseIndex, browseSource, deletePrompt, promptApi, promptForm } from "./routes/browse";
+import { browseIndex, browseSource, deletePrompt, promptApi, promptForm, sourceApi } from "./routes/browse";
 import { settingsApi, settingsPage } from "./routes/settings";
 import { exportZip, importForeign, importZip } from "./routes/transfer";
 import { runReminderCron } from "./email";
@@ -46,6 +46,7 @@ export default {
     if (delMatch && request.method === "POST") return deleteCapture(delMatch[1], env);
     if (url.pathname === "/api/preview" && request.method === "POST") return previewApi(request, env);
     if (url.pathname === "/browse" && request.method === "GET") return browseIndex(env);
+    if (url.pathname === "/api/source" && request.method === "POST") return sourceApi(request, env);
     const srcMatch = url.pathname.match(/^\/browse\/([a-z0-9]{10})$/);
     if (srcMatch && request.method === "GET") return browseSource(srcMatch[1], env);
     const pMatch = url.pathname.match(/^\/prompt\/(new|[a-z0-9]{10})$/);

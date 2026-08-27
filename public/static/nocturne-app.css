@@ -279,3 +279,12 @@ button.seg-opt { background: none; border: 0; color: inherit; font: inherit; }
   margin: 0 0 var(--space-4);
 }
 .session-close .btn { display: inline-flex; }
+
+/* ── browse: header + inline create row ────────────────────────────── */
+.page-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--space-4); margin-bottom: var(--space-6);
+}
+.row-create { display: flex; flex-direction: column; gap: var(--space-3); }
+.row-create[hidden] { display: none; }
+.row-create .note { color: color-mix(in srgb, var(--color-text) 48%, transparent); }

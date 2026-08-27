@@ -274,6 +274,52 @@ describe("browse, prompt edit, settings", () => {
     expect(html).toContain("Direct Src");
   });
 
+  it("POST /api/source creates a source usable by browse and prompt/new", async () => {
+    const res = await POST("/api/source", { name: "Manual Src", url: "https://manual.example/x" });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { ok: boolean; id: string; existed: boolean };
+    expect(body.existed).toBe(false);
+    const row = await env.DB.prepare("SELECT name, url FROM sources WHERE id = ?").bind(body.id).first();
+    expect(row?.name).toBe("Manual Src");
+    expect(row?.url).toBe("https://manual.example/x");
+    const browse = await (await exports.default.fetch("http://sr/browse", AUTH)).text();
+    expect(browse).toContain("Manual Src");
+    const form = await exports.default.fetch(`http://sr/prompt/new?source=${body.id}`, AUTH);
+    expect(form.status).toBe(200);
+    expect(await form.text()).toContain("Manual Src");
+  });
+
+  it("POST /api/source rejects a missing or whitespace name", async () => {
+    expect((await POST("/api/source", {})).status).toBe(400);
+    const ws = await POST("/api/source", { name: "   " });
+    expect(ws.status).toBe(400);
+    expect((await ws.json() as { error: string }).error).toBe("source name required");
+  });
+
+  it("POST /api/source dedupes by name case-insensitively", async () => {
+    const first = await (await POST("/api/source", { name: "Dedupe Src" })).json() as { id: string };
+    const again = await (await POST("/api/source", { name: "dedupe src" })).json() as { id: string; existed: boolean };
+    expect(again.existed).toBe(true);
+    expect(again.id).toBe(first.id);
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM sources WHERE name = ? COLLATE NOCASE")
+      .bind("Dedupe Src").first<{ n: number }>();
+    expect(n?.n).toBe(1);
+  });
+
+  it("browse index inlines source names script-safely", async () => {
+    await POST("/api/source", { name: "</script><script>alert(1)</script>" });
+    const html = await (await exports.default.fetch("http://sr/browse", AUTH)).text();
+    expect(html).not.toContain("</script><script>alert(1)");
+    expect(html).toContain("\\u003c/script>\\u003cscript>alert(1)");
+  });
+
+  it("empty source page shows the + Prompt call to action", async () => {
+    const { id } = await (await POST("/api/source", { name: "Empty Src" })).json() as { id: string };
+    const html = await (await exports.default.fetch(`http://sr/browse/${id}`, AUTH)).text();
+    expect(html).toContain(`/prompt/new?source=${id}`);
+    expect(html).toContain("No prompts yet");
+  });
+
   it("settings round-trip and validation", async () => {
     const ok = await POST("/api/settings", {
       session_cap: 25, desired_retention: 0.85, email_hour: 8, timezone: "America/New_York",
