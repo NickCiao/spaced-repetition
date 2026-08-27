@@ -23,6 +23,6 @@ Single-user spaced-repetition app: capture → refine → review → export/impo
 - Runtime deps: `ts-fsrs`, `marked`, `katex`, `fflate` only. Ask before adding anything.
 
 **Dev:** `npm run migrate:local` · copy `.dev.vars.example` → `.dev.vars` · `npm run dev` · `/?token=devtoken` · first-time prod: `npm run setup` or Deploy to Cloudflare button · ops in README
-**Test:** `npm test`. Route tests use `exports.default.fetch` + `AUTH` from `test/routes.test.ts`.
+**Test:** `npm test`. Route tests use `exports.default.fetch` + auth/wipe helpers from `test/helpers.ts`.
 
 **When changing:** new routes → `src/routes/` + wire `index.ts` + test. Schema → new `migrations/` file. Use `escapeHtml()`, parameterized SQL, `nowIso()` for timestamps. Deploy script must keep remote migrations on the D1 **binding** name (`DB`) so the Deploy to Cloudflare button works when users rename the database.

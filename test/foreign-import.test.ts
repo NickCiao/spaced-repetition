@@ -1,8 +1,8 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { strToU8, zipSync } from "fflate";
+import { AUTH_HEADERS as AUTH } from "./helpers";
 
-const AUTH = { Authorization: "Bearer test-token" };
 const post = (path: string, body: BodyInit) =>
   exports.default.fetch(`http://sr${path}`, { method: "POST", headers: AUTH, body });
 

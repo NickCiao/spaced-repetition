@@ -1,6 +1,7 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { newId, nowIso } from "../src/db";
+import { AUTH } from "./helpers";
 
 describe("health", () => {
   it("GET /health responds ok without auth", async () => {
@@ -47,7 +48,6 @@ describe("auth", () => {
   });
 });
 
-export const AUTH = { headers: { Authorization: "Bearer test-token" } };
 const POST = (path: string, body: unknown) =>
   exports.default.fetch(`http://sr${path}`, {
     method: "POST",

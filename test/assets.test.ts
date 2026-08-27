@@ -1,7 +1,7 @@
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import { AUTH_HEADERS as AUTH } from "./helpers";
 
-const AUTH = { Authorization: "Bearer test-token" };
 const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4, 5]);
 
 describe("assets", () => {

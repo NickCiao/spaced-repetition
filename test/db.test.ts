@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { getSetting, getSettings, newId, rememberBaseUrl, setSetting } from "../src/db";
+import { getSetting, getSettings, insertPromptStmt, insertSource, newId, rememberBaseUrl, setSetting } from "../src/db";
+import { newCardFields } from "../src/scheduler";
 
 describe("db", () => {
   it("seeds default settings", async () => {
@@ -38,18 +39,20 @@ describe("db", () => {
     expect(a).not.toBe(b);
   });
 
-  it("schema accepts a full prompt row", async () => {
+  it("insert helpers agree with the schema (guards column-list drift)", async () => {
+    // insertPromptStmt/insertSource are the only production code that writes these
+    // column lists — a schema migration that forgets them must fail here.
     const now = new Date().toISOString();
-    await env.DB.prepare(
-      `INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, ?, ?, '{}', ?)`
-    ).bind("src0000001", "Test Source", null, now).run();
-    await env.DB.prepare(
-      `INSERT INTO prompts (id, source_id, kind, question, answer, position, created_at, updated_at,
-        due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
-       VALUES (?, ?, 'qa', 'Q?', 'A.', 0, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, NULL)`
-    ).bind("pmt0000001", "src0000001", now, now, now).run();
+    const sid = await insertSource(env.DB, { name: "Test Source", url: null, created_at: now });
+    await insertPromptStmt(env.DB, {
+      id: "pmt0000001", source_id: sid, kind: "qa", question: "Q?", answer: "A.",
+      position: 0, created_at: now, updated_at: now
+    }, newCardFields(new Date())).run();
     const row = await env.DB.prepare(`SELECT * FROM prompts WHERE id = ?`).bind("pmt0000001").first();
     expect(row?.kind).toBe("qa");
     expect(row?.retired).toBe(0);
+    expect(row?.source_id).toBe(sid);
+    const src = await env.DB.prepare(`SELECT * FROM sources WHERE id = ?`).bind(sid).first();
+    expect(src?.meta).toBe("{}");
   });
 });
