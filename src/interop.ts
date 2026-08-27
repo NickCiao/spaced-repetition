@@ -1,4 +1,5 @@
 import { strFromU8 } from "fflate";
+import { CLOZE_RE, MARKER } from "./format";
 
 export type ForeignPrompt = { kind: "qa" | "cloze"; question: string; answer: string };
 export type ForeignDeck = { name: string; prompts: ForeignPrompt[] };
@@ -10,8 +11,6 @@ export class InteropError extends Error {
     super(message);
   }
 }
-
-const MARKER = /^(?:(?:Q:|A:|C:)(?: |$)|<!-- id:|---$)/;
 
 export function sanitizeRepresentable(text: string): string {
   return text.split("\n").map(line => MARKER.test(line) ? ` ${line}` : line).join("\n");
@@ -147,15 +146,16 @@ function promptsFromAnkiRow(
     return [{ kind: "qa", question: front, answer: back }];
   }
   if (notetype === "Basic (and reversed card)") {
-    const out: ForeignPrompt[] = [];
-    if (front && back) out.push({ kind: "qa", question: front, answer: back });
-    if (back && front) out.push({ kind: "qa", question: back, answer: front });
-    return out;
+    if (!front || !back) return [];
+    return [
+      { kind: "qa", question: front, answer: back },
+      { kind: "qa", question: back, answer: front }
+    ];
   }
-  if (notetype === "Cloze" || notetype.startsWith("Cloze")) {
+  if (notetype.startsWith("Cloze")) {
     let question = ankiClozeToOurs(front);
     if (extra) question = question ? `${question}\n\n${extra}` : extra;
-    if (!/\{\{[\s\S]+?\}\}/.test(question)) {
+    if (!CLOZE_RE.test(question)) {
       warnings.push(`cloze notetype row has no {{span}}: "${front.slice(0, 40)}"`);
       return [];
     }
@@ -290,9 +290,9 @@ function mochiCardToPrompts(
     return [];
   }
 
-  if (/\{\{[\s\S]+?\}\}/.test(question) || /\{\{[\s\S]+?\}\}/.test(answer)) {
+  if (CLOZE_RE.test(question) || CLOZE_RE.test(answer)) {
     const clozeQ = question || answer;
-    if (!/\{\{[\s\S]+?\}\}/.test(clozeQ)) return [];
+    if (!CLOZE_RE.test(clozeQ)) return [];
     return [{ kind: "cloze", question: clozeQ, answer: "" }];
   }
 
@@ -337,13 +337,12 @@ export function parseMochi(files: Record<string, Uint8Array>): ForeignImport {
   if (!decks.length) throw new InteropError("no cards found in Mochi export");
 
   const referenced = new Set<string>();
-  const mediaRe = /!\[[^\]]*\]\(@media\/([^)]+)\)/g;
   for (const deck of decks) {
     for (const p of deck.prompts) {
       for (const text of [p.question, p.answer]) {
         let m: RegExpExecArray | null;
-        mediaRe.lastIndex = 0;
-        while ((m = mediaRe.exec(text))) referenced.add(m[1]);
+        MEDIA_REF_RE.lastIndex = 0;
+        while ((m = MEDIA_REF_RE.exec(text))) referenced.add(m[2]);
       }
     }
   }

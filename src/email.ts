@@ -199,7 +199,7 @@ export async function resolveMailConfig(env: Env): Promise<{
 }
 
 async function sendReminder(
-  env: Env, mail: { emailTo: string; resendKey: string; emailFrom: string },
+  mail: { emailTo: string; resendKey: string; emailFrom: string },
   subject: string, html: string
 ): Promise<void> {
   const res = await fetch("https://api.resend.com/emails", {
@@ -248,7 +248,7 @@ export async function runReminderCron(env: Env, now: Date): Promise<void> {
       }));
     } else {
       const { subject, html } = composeReminder(session.dueCount, mail.baseUrl, session.reason);
-      await sendReminder(env, mail, subject, html);
+      await sendReminder(mail, subject, html);
     }
   }
   await setSetting(env.DB, "cadence", JSON.stringify(d.cadence));

@@ -1,5 +1,6 @@
 import type { Env } from "../env.d";
-import { getSettings, newId, nowIso, type CaptureRow, type PromptRow, type SourceRow } from "../db";
+import { getSettings, insertPromptStmt, insertSource, newId, nowIso, type CaptureRow, type PromptRow, type SourceRow } from "../db";
+import { normalizePromptInput, validatePromptInput } from "../format";
 import { newCardFields } from "../scheduler";
 import { renderPromptAnswer, renderPromptQuestion } from "../markdown";
 import { captureCardMeta, captureRowMeta, escapeHtml, page, shellFor } from "../html";
@@ -81,12 +82,8 @@ export async function refineApi(request: Request, env: Env): Promise<Response> {
     return Response.json({ error: "capture_id, source, prompts required" }, { status: 400 });
   }
   for (const p of b.prompts) {
-    if (p.kind !== "qa" && p.kind !== "cloze") return Response.json({ error: "bad kind" }, { status: 400 });
-    if (!p.question?.trim()) return Response.json({ error: "question required" }, { status: 400 });
-    if (p.kind === "cloze" && !/\{\{[\s\S]+?\}\}/.test(p.question))
-      return Response.json({ error: "cloze needs at least one {{span}}" }, { status: 400 });
-    if (p.kind === "qa" && !p.answer?.trim())
-      return Response.json({ error: "answer required for qa" }, { status: 400 });
+    const invalid = validatePromptInput(p);
+    if (invalid) return Response.json({ error: invalid }, { status: 400 });
   }
   if (!b.source.id && !b.source.name?.trim()) {
     return Response.json({ error: "source name required" }, { status: 400 });
@@ -104,14 +101,13 @@ export async function refineApi(request: Request, env: Env): Promise<Response> {
     const ts = nowIso();
     let sourceId = b.source.id ?? null;
     if (!sourceId) {
-      const existing = await env.DB.prepare("SELECT id FROM sources WHERE name = ?")
+      // Case-insensitive dedupe, matching /api/source: refining into "gwern"
+      // must reuse "Gwern" rather than create a near-duplicate.
+      const existing = await env.DB.prepare("SELECT id FROM sources WHERE name = ? COLLATE NOCASE")
         .bind(b.source.name!.trim()).first<SourceRow>();
-      if (existing) sourceId = existing.id;
-      else {
-        sourceId = newId();
-        await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, ?, ?, '{}', ?)")
-          .bind(sourceId, b.source.name!.trim(), b.source.url || null, ts).run();
-      }
+      sourceId = existing
+        ? existing.id
+        : await insertSource(env.DB, { name: b.source.name!.trim(), url: b.source.url || null, created_at: ts });
     }
 
     const posRow = await env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS p FROM prompts WHERE source_id = ?")
@@ -122,15 +118,11 @@ export async function refineApi(request: Request, env: Env): Promise<Response> {
     const stmts = b.prompts.map((p) => {
       const id = newId();
       ids.push(id);
-      const f = newCardFields(new Date());
-      return env.DB.prepare(
-        `INSERT INTO prompts (id, source_id, kind, question, answer, position, created_at, updated_at,
-          due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(id, sourceId, p.kind, p.question.replace(/\s+$/, ""),
-             p.kind === "cloze" ? "" : (p.answer ?? "").replace(/\s+$/, ""), pos++, ts, ts,
-             f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
-             f.reps, f.lapses, f.state, f.last_review);
+      const { question, answer } = normalizePromptInput(p);
+      return insertPromptStmt(env.DB, {
+        id, source_id: sourceId!, kind: p.kind, question, answer,
+        position: pos++, created_at: ts, updated_at: ts
+      }, newCardFields(new Date()));
     });
     await env.DB.batch(stmts); // all-or-nothing
     return Response.json({ ok: true, prompt_ids: ids });
@@ -146,7 +138,7 @@ export async function deleteCapture(id: string, env: Env): Promise<Response> {
   return Response.json({ ok: true });
 }
 
-export async function previewApi(request: Request, env: Env): Promise<Response> {
+export async function previewApi(request: Request): Promise<Response> {
   const b = await request.json<{ kind: "qa" | "cloze"; question: string; answer: string }>().catch(() => null);
   if (!b) return Response.json({ error: "bad body" }, { status: 400 });
   return Response.json({

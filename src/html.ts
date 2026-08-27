@@ -6,6 +6,14 @@ export function escapeHtml(s: string): string {
           .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+/**
+ * JSON safe to inline inside a <script> tag: "<" is \u003c-escaped so content
+ * containing "</script>" cannot break out of the tag.
+ */
+export function jsonForScript(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
 export type AppPage = "review" | "capture" | "inbox" | "browse" | "settings";
 
 // Fish mono mark (see assets/icon/handoff.md). The eye knockout is faked with the

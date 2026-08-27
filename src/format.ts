@@ -7,7 +7,38 @@ export class FormatError extends Error {
   }
 }
 
-const MARKER = /^(?:(?:Q:|A:|C:)(?: |$)|<!-- id:|---$)/;
+/** Lines that collide with the interchange file format (shared with interop's sanitizer). */
+export const MARKER = /^(?:(?:Q:|A:|C:)(?: |$)|<!-- id:|---$)/;
+
+/** A cloze prompt must contain at least one {{span}}. */
+export const CLOZE_RE = /\{\{[\s\S]+?\}\}/;
+
+/**
+ * Shared request validation for prompt create/edit (browse form and refine).
+ * Returns an error message, or null if the input is acceptable.
+ */
+export function validatePromptInput(p: { kind?: string; question?: string; answer?: string }): string | null {
+  if (p.kind !== "qa" && p.kind !== "cloze") return "bad kind";
+  if (!p.question?.trim()) return "question required";
+  if (p.kind === "cloze" && !CLOZE_RE.test(p.question)) return "cloze needs at least one {{span}}";
+  if (p.kind === "qa" && !p.answer?.trim()) return "answer required for qa";
+  return null;
+}
+
+/**
+ * Trailing whitespace is stripped at write, matching the tail-trimming the
+ * interchange format does on parse — otherwise a round-tripped export would
+ * diff against the DB row and show up as a phantom dry-run edit. Cloze
+ * answers are normalized to empty. Call after validatePromptInput.
+ */
+export function normalizePromptInput(
+  p: { kind?: string; question?: string; answer?: string }
+): { question: string; answer: string } {
+  return {
+    question: (p.question ?? "").replace(/\s+$/, ""),
+    answer: p.kind === "cloze" ? "" : (p.answer ?? "").replace(/\s+$/, "")
+  };
+}
 
 function checkRepresentable(path: string, text: string, kind: string): void {
   const lines = text.split("\n");
@@ -92,7 +123,7 @@ export function parseSourceFile(text: string, path: string): ParsedFile {
     if (!cur) return;
     const question = trimTail(cur.q).join("\n");
     const answer = trimTail(cur.a).join("\n");
-    if (cur.kind === "cloze" && !/\{\{[\s\S]+?\}\}/.test(question))
+    if (cur.kind === "cloze" && !CLOZE_RE.test(question))
       fail(cur.line, "cloze block has no {{span}}");
     if (cur.kind === "qa" && cur.mode === "q") fail(cur.line, "Q block without A:");
     if (id && prompts.some(p => p.id === id)) fail(atLine, `duplicate id ${id}`);

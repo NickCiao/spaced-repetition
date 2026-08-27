@@ -1,12 +1,12 @@
 import { strFromU8 } from "fflate";
 import type { Env } from "./env.d";
-import { newId, type PromptRow, type SourceRow } from "./db";
+import { insertPromptStmt, insertSource, newId, setSetting, type PromptRow, type SourceRow } from "./db";
 import { FormatError, parseSourceFile, type ParsedFile, type ParsedPrompt } from "./format";
 import {
   type ForeignImport, type ForeignPrompt, rewriteMediaRefs
 } from "./interop";
 import { applyGrade, newCardFields } from "./scheduler";
-import { ALLOWED_TYPES } from "./routes/assets";
+import { ALLOWED_TYPES, storeAsset } from "./assets";
 
 export class RestoreNotEmptyError extends Error {}
 
@@ -44,6 +44,10 @@ function parseAll(files: Record<string, Uint8Array>): { parsed: Parsed; errors: 
 
 export async function computeImportDiff(env: Env, files: Record<string, Uint8Array>): Promise<Diff> {
   const { parsed, errors } = parseAll(files);
+  return diffAgainstDb(env, parsed, errors);
+}
+
+async function diffAgainstDb(env: Env, parsed: Parsed, errors: string[]): Promise<Diff> {
   const diff: Diff = { newPrompts: [], edited: [], retired: [], newSources: [], errors };
 
   // Load every prompt, retired included: a retired id showing back up in an upload
@@ -80,22 +84,24 @@ export async function computeImportDiff(env: Env, files: Record<string, Uint8Arr
 export async function applyImport(
   env: Env, files: Record<string, Uint8Array>, now: Date
 ): Promise<{ new: number; edited: number; retired: number }> {
-  const diff = await computeImportDiff(env, files);
+  const { parsed, errors } = parseAll(files);
+  const diff = await diffAgainstDb(env, parsed, errors);
   if (diff.errors.length) throw new Error(diff.errors.join("; "));
-  const { parsed } = parseAll(files);
+  const editedIds = new Set(diff.edited);
   const ts = now.toISOString();
   let created = 0, edited = 0;
 
   for (const { file } of parsed) {
-    let source = await env.DB.prepare("SELECT * FROM sources WHERE name = ?").bind(file.name).first<SourceRow>();
-    if (!source) {
-      const sid = newId();
-      await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, ?, ?, ?, ?)")
-        .bind(sid, file.name, file.url, JSON.stringify(file.meta), ts).run();
-      source = { id: sid, name: file.name, url: file.url, meta: JSON.stringify(file.meta), created_at: ts };
+    const existing = await env.DB.prepare("SELECT * FROM sources WHERE name = ?").bind(file.name).first<SourceRow>();
+    let sourceId: string;
+    if (!existing) {
+      sourceId = await insertSource(env.DB, {
+        name: file.name, url: file.url, meta: JSON.stringify(file.meta), created_at: ts
+      });
     } else {
+      sourceId = existing.id;
       await env.DB.prepare("UPDATE sources SET url = ?, meta = ? WHERE id = ?")
-        .bind(file.url, JSON.stringify(file.meta), source.id).run();
+        .bind(file.url, JSON.stringify(file.meta), sourceId).run();
     }
     let pos = 0;
     for (const p of file.prompts) {
@@ -104,17 +110,13 @@ export async function applyImport(
         // whether it was already active (no-op) or retired (this is what un-retires it).
         await env.DB.prepare(
           "UPDATE prompts SET source_id=?, kind=?, question=?, answer=?, position=?, retired=0, updated_at=? WHERE id=?"
-        ).bind(source.id, p.kind, p.question, p.answer, pos++, ts, p.id).run();
-        if (diff.edited.includes(p.id)) edited++;
+        ).bind(sourceId, p.kind, p.question, p.answer, pos++, ts, p.id).run();
+        if (editedIds.has(p.id)) edited++;
       } else {
-        const f = newCardFields(now);
-        await env.DB.prepare(
-          `INSERT INTO prompts (id, source_id, kind, question, answer, position, created_at, updated_at,
-            due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(newId(), source.id, p.kind, p.question, p.answer, pos++, ts, ts,
-               f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
-               f.reps, f.lapses, f.state, f.last_review).run();
+        await insertPromptStmt(env.DB, {
+          id: newId(), source_id: sourceId, kind: p.kind, question: p.question, answer: p.answer,
+          position: pos++, created_at: ts, updated_at: ts
+        }, newCardFields(now)).run();
         created++;
       }
     }
@@ -151,19 +153,6 @@ export type ForeignImportResult = {
   sources: { name: string; created: number; skipped: number }[];
   warnings: string[];
 };
-
-async function storeAsset(env: Env, bytes: Uint8Array, type: string, ts: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  const id = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
-  const existing = await env.DB.prepare("SELECT id FROM assets WHERE id = ?").bind(id).first();
-  if (!existing) {
-    await env.BUCKET.put(id, bytes, { httpMetadata: { contentType: type } });
-    await env.DB.prepare(
-      "INSERT INTO assets (id, content_type, bytes, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING"
-    ).bind(id, type, bytes.byteLength, ts).run();
-  }
-  return id;
-}
 
 function promptKey(p: ForeignPrompt): string {
   return `${p.kind}\0${p.question}\0${p.answer}`;
@@ -229,20 +218,14 @@ export async function applyForeignImport(
       }
 
       if (!source) {
-        const sid = newId();
-        await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, ?, ?, ?, ?)")
-          .bind(sid, deck.name, null, "{}", ts).run();
+        const sid = await insertSource(env.DB, { name: deck.name, url: null, created_at: ts });
         source = { id: sid, name: deck.name, url: null, meta: "{}", created_at: ts };
       }
 
-      const f = newCardFields(now);
-      await env.DB.prepare(
-        `INSERT INTO prompts (id, source_id, kind, question, answer, position, created_at, updated_at,
-          due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(newId(), source.id, prompt.kind, prompt.question, prompt.answer, ++pos, ts, ts,
-        f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
-        f.reps, f.lapses, f.state, f.last_review).run();
+      await insertPromptStmt(env.DB, {
+        id: newId(), source_id: source.id, kind: prompt.kind, question: prompt.question, answer: prompt.answer,
+        position: ++pos, created_at: ts, updated_at: ts
+      }, newCardFields(now)).run();
       existingKeys.add(key);
       created++;
       deckCreated++;
@@ -297,14 +280,10 @@ export async function restoreFromZip(
       for (const e of evs) {
         if (e.action === "remembered" || e.action === "forgot") f = applyGrade(f, e.action, new Date(e.ts), retention);
       }
-      await env.DB.prepare(
-        `INSERT INTO prompts (id, source_id, kind, question, answer, position, retired, created_at, updated_at,
-          due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(id, sourceId, kind, question, answer, position, retired,
-             birth.toISOString(), now.toISOString(),
-             f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
-             f.reps, f.lapses, f.state, f.last_review).run();
+      await insertPromptStmt(env.DB, {
+        id, source_id: sourceId, kind, question, answer, position, retired,
+        created_at: birth.toISOString(), updated_at: now.toISOString()
+      }, f).run();
       nPrompts++;
     }
 
@@ -313,9 +292,9 @@ export async function restoreFromZip(
     let nSources = 0;
     const sourceIdByName = new Map<string, string>();
     for (const { file } of parsed) {
-      const sid = newId();
-      await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, ?, ?, ?, ?)")
-        .bind(sid, file.name, file.url, JSON.stringify(file.meta), now.toISOString()).run();
+      const sid = await insertSource(env.DB, {
+        name: file.name, url: file.url, meta: JSON.stringify(file.meta), created_at: now.toISOString()
+      });
       sourceIdByName.set(file.name, sid);
       nSources++;
       let pos = 0;
@@ -333,9 +312,7 @@ export async function restoreFromZip(
     for (const a of archive) {
       let sid = sourceIdByName.get(a.source_name);
       if (!sid) {
-        sid = newId();
-        await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, ?, ?, ?, ?)")
-          .bind(sid, a.source_name, null, "{}", now.toISOString()).run();
+        sid = await insertSource(env.DB, { name: a.source_name, url: null, created_at: now.toISOString() });
         sourceIdByName.set(a.source_name, sid);
         nSources++;
       }
@@ -380,11 +357,7 @@ export async function restoreFromZip(
     if (files["settings.json"]) {
       const s = JSON.parse(strFromU8(files["settings.json"])) as Record<string, unknown>;
       for (const k of ["session_cap", "desired_retention", "email_hour", "timezone", "email_to"]) {
-        if (s[k] !== undefined) {
-          await env.DB.prepare(
-            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-          ).bind(k, String(s[k])).run();
-        }
+        if (s[k] !== undefined) await setSetting(env.DB, k, String(s[k]));
       }
     }
     return { sources: nSources, prompts: nPrompts, events: log.length };

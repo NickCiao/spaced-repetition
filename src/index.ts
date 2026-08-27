@@ -44,7 +44,7 @@ export default {
     if (url.pathname === "/api/refine" && request.method === "POST") return refineApi(request, env);
     const delMatch = url.pathname.match(/^\/api\/capture\/([a-z0-9]{10})\/delete$/);
     if (delMatch && request.method === "POST") return deleteCapture(delMatch[1], env);
-    if (url.pathname === "/api/preview" && request.method === "POST") return previewApi(request, env);
+    if (url.pathname === "/api/preview" && request.method === "POST") return previewApi(request);
     if (url.pathname === "/browse" && request.method === "GET") return browseIndex(env);
     if (url.pathname === "/api/source" && request.method === "POST") return sourceApi(request, env);
     const srcMatch = url.pathname.match(/^\/browse\/([a-z0-9]{10})$/);

@@ -2,7 +2,7 @@ import type { Env } from "../env.d";
 import { getSettings, nowIso, type PromptRow } from "../db";
 import { applyGrade } from "../scheduler";
 import { buildSession } from "../session";
-import { page, shellFor } from "../html";
+import { jsonForScript, page, shellFor } from "../html";
 
 export async function reviewPage(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -19,7 +19,7 @@ export async function reviewPage(request: Request, env: Env): Promise<Response> 
 
   const sessionPayload = { ...session, sourceId };
   const body = `<div id="review"></div>
-<script type="application/json" id="session">${JSON.stringify(sessionPayload).replace(/</g, "\\u003c")}</script>`;
+<script type="application/json" id="session">${jsonForScript(sessionPayload)}</script>`;
 
   return page("Review", body, {
     script: "/static/review.js",

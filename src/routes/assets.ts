@@ -1,12 +1,8 @@
 import type { Env } from "../env.d";
 import { nowIso } from "../db";
+import { ALLOWED_TYPES, storeAsset } from "../assets";
 
 const MAX_BYTES = 5 * 1024 * 1024;
-
-// image/svg+xml is deliberately excluded: an SVG can embed <script>, and served
-// same-origin it would execute with access to this app's session — the raster
-// formats below carry no such risk.
-export const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"]);
 
 export async function uploadAsset(request: Request, env: Env): Promise<Response> {
   const type = request.headers.get("Content-Type") ?? "";
@@ -14,18 +10,7 @@ export async function uploadAsset(request: Request, env: Env): Promise<Response>
   const buf = await request.arrayBuffer();
   if (buf.byteLength === 0) return Response.json({ error: "empty" }, { status: 400 });
   if (buf.byteLength > MAX_BYTES) return Response.json({ error: "too large" }, { status: 413 });
-
-  const digest = await crypto.subtle.digest("SHA-256", buf);
-  const id = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
-
-  const existing = await env.DB.prepare("SELECT id FROM assets WHERE id = ?").bind(id).first();
-  if (!existing) {
-    await env.BUCKET.put(id, buf, { httpMetadata: { contentType: type } });
-    // ON CONFLICT: two concurrent uploads of the same bytes must both get {id},
-    // not a constraint crash for the loser. R2 put is an idempotent overwrite.
-    await env.DB.prepare("INSERT INTO assets (id, content_type, bytes, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING")
-      .bind(id, type, buf.byteLength, nowIso()).run();
-  }
+  const id = await storeAsset(env, buf, type, nowIso());
   return Response.json({ id });
 }
 

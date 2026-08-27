@@ -231,6 +231,23 @@ describe("inbox and refine", () => {
     expect(body.answerHtml).toContain("this");
   });
 
+  it("refine dedupes source names case-insensitively, like /api/source", async () => {
+    const { id: sid } = await (await POST("/api/source", { name: "Case Src" })).json() as { id: string };
+    const cid = await seedCapture("case-cap");
+    const res = await POST("/api/refine", {
+      capture_id: cid,
+      source: { name: "case src" },
+      prompts: [{ kind: "qa", question: "cq?", answer: "ca" }]
+    });
+    expect(res.status).toBe(200);
+    const { prompt_ids } = await res.json() as { prompt_ids: string[] };
+    const p = await env.DB.prepare("SELECT source_id FROM prompts WHERE id = ?").bind(prompt_ids[0]).first();
+    expect(p?.source_id).toBe(sid);
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM sources WHERE name = ? COLLATE NOCASE")
+      .bind("Case Src").first<{ n: number }>();
+    expect(n?.n).toBe(1);
+  });
+
   it("concurrent refines of one capture create prompts exactly once", async () => {
     const cid = await seedCapture("race-me");
     const body = { capture_id: cid, source: { name: "Race Src" }, prompts: [{ kind: "qa", question: "rq?", answer: "ra" }] };

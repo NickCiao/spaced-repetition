@@ -1,7 +1,8 @@
 import type { Env } from "../env.d";
-import { newId, nowIso, type PromptRow, type SourceRow } from "../db";
+import { insertPromptStmt, insertSource, newId, nowIso, type PromptRow, type SourceRow } from "../db";
+import { normalizePromptInput, validatePromptInput } from "../format";
 import { newCardFields } from "../scheduler";
-import { escapeHtml, hostOnly, page, shellFor } from "../html";
+import { escapeHtml, hostOnly, jsonForScript, page, shellFor } from "../html";
 
 export async function browseIndex(env: Env): Promise<Response> {
   const shell = await shellFor(env.DB, "browse");
@@ -15,9 +16,8 @@ export async function browseIndex(env: Env): Promise<Response> {
       <span class="row-count">${r.n} prompts</span>
     </div>`
   ).join("") || "<p class='empty'>No sources yet.</p>";
-  // Names feed the duplicate hint client-side. \u003c-escaped so a source name
-  // containing "</script>" cannot break out of the inline script tag.
-  const names = JSON.stringify(rows.map(r => ({ id: r.id, name: r.name }))).replace(/</g, "\\u003c");
+  // Names feed the duplicate hint client-side.
+  const names = jsonForScript(rows.map(r => ({ id: r.id, name: r.name })));
   const body = `
 <div class="page-head">
   <h1 class="page-title" style="margin:0">Browse</h1>
@@ -92,9 +92,7 @@ export async function sourceApi(request: Request, env: Env): Promise<Response> {
   const existing = await env.DB.prepare("SELECT id FROM sources WHERE name = ? COLLATE NOCASE")
     .bind(name).first<SourceRow>();
   if (existing) return Response.json({ ok: true, id: existing.id, existed: true });
-  const id = newId();
-  await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, ?, ?, '{}', ?)")
-    .bind(id, name, b?.url?.trim() || null, nowIso()).run();
+  const id = await insertSource(env.DB, { name, url: b?.url?.trim() || null, created_at: nowIso() });
   return Response.json({ ok: true, id, existed: false });
 }
 
@@ -232,20 +230,12 @@ type PromptBody = {
 
 export async function promptApi(request: Request, env: Env): Promise<Response> {
   const b = await request.json<PromptBody>().catch(() => null);
-  if (!b?.source_id || (b.kind !== "qa" && b.kind !== "cloze") || !b.question?.trim()) {
-    return Response.json({ error: "source_id, kind, question required" }, { status: 400 });
-  }
-  if (b.kind === "cloze" && !/\{\{[\s\S]+?\}\}/.test(b.question))
-    return Response.json({ error: "cloze needs at least one {{span}}" }, { status: 400 });
-  if (b.kind === "qa" && !b.answer?.trim())
-    return Response.json({ error: "answer required for qa" }, { status: 400 });
+  if (!b?.source_id) return Response.json({ error: "source_id required" }, { status: 400 });
+  const invalid = validatePromptInput(b);
+  if (invalid) return Response.json({ error: invalid }, { status: 400 });
 
   const ts = nowIso();
-  // Trailing whitespace is stripped at write, matching the tail-trimming the
-  // interchange format already does on parse — otherwise a round-tripped export
-  // would diff against the DB row and show up as a phantom dry-run edit.
-  const question = b.question.replace(/\s+$/, "");
-  const answer = b.kind === "cloze" ? "" : (b.answer ?? "").replace(/\s+$/, "");
+  const { question, answer } = normalizePromptInput(b);
   if (b.id) {
     const existing = await env.DB.prepare("SELECT id FROM prompts WHERE id = ?").bind(b.id).first();
     if (!existing) return Response.json({ error: "unknown prompt" }, { status: 404 });
@@ -256,16 +246,12 @@ export async function promptApi(request: Request, env: Env): Promise<Response> {
     return Response.json({ ok: true, id: b.id });
   }
   const id = newId();
-  const f = newCardFields(new Date());
-  await env.DB.prepare(
-    `INSERT INTO prompts (id, source_id, kind, question, answer, position, created_at, updated_at,
-      due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
-     VALUES (?, ?, ?, ?, ?,
-       (SELECT COALESCE(MAX(position), -1) + 1 FROM prompts WHERE source_id = ?), ?, ?,
-       ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(id, b.source_id, b.kind, question, answer, b.source_id, ts, ts,
-         f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
-         f.reps, f.lapses, f.state, f.last_review).run();
+  const posRow = await env.DB.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM prompts WHERE source_id = ?")
+    .bind(b.source_id).first<{ p: number }>();
+  await insertPromptStmt(env.DB, {
+    id, source_id: b.source_id, kind: b.kind!, question, answer,
+    position: posRow?.p ?? 0, created_at: ts, updated_at: ts
+  }, newCardFields(new Date())).run();
   return Response.json({ ok: true, id });
 }
 

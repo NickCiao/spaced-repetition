@@ -18,6 +18,8 @@ export type EventRow = {
   elapsed_days: number | null; state_after: string | null;
 };
 
+import type { SchedFields } from "./scheduler";
+
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
 export function newId(): string {
@@ -29,6 +31,40 @@ export function newId(): string {
 
 export function nowIso(): string {
   return new Date().toISOString();
+}
+
+/** Insert a source row and return its new id. */
+export async function insertSource(
+  db: D1Database,
+  s: { name: string; url: string | null; created_at: string; meta?: string }
+): Promise<string> {
+  const id = newId();
+  await db.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, ?, ?, ?, ?)")
+    .bind(id, s.name, s.url, s.meta ?? "{}", s.created_at).run();
+  return id;
+}
+
+/**
+ * The one place that knows the full prompts column list. Returns a prepared
+ * statement (not run) so callers can either `.run()` it or collect several
+ * into an atomic `db.batch()`.
+ */
+export function insertPromptStmt(
+  db: D1Database,
+  p: {
+    id: string; source_id: string; kind: "qa" | "cloze"; question: string; answer: string;
+    position: number; retired?: number; created_at: string; updated_at: string;
+  },
+  f: SchedFields
+): D1PreparedStatement {
+  return db.prepare(
+    `INSERT INTO prompts (id, source_id, kind, question, answer, position, retired, created_at, updated_at,
+      due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(p.id, p.source_id, p.kind, p.question, p.answer, p.position, p.retired ?? 0,
+         p.created_at, p.updated_at,
+         f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
+         f.reps, f.lapses, f.state, f.last_review);
 }
 
 export async function getSetting(db: D1Database, key: string): Promise<string | null> {
