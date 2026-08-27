@@ -7,7 +7,12 @@ const staticDir = join(root, "public", "static");
 
 await mkdir(join(staticDir, "katex"), { recursive: true });
 await cp(join(root, "node_modules", "katex", "dist", "katex.min.css"), join(staticDir, "katex", "katex.min.css"));
-await cp(join(root, "node_modules", "katex", "dist", "fonts"), join(staticDir, "katex", "fonts"), { recursive: true });
+// woff2 only (like Phosphor below): katex.min.css lists woff2 first, so the
+// woff/ttf fallbacks are never fetched by any browser this app supports.
+await cp(join(root, "node_modules", "katex", "dist", "fonts"), join(staticDir, "katex", "fonts"), {
+  recursive: true,
+  filter: (src) => !/\.(woff|ttf)$/.test(src)
+});
 
 await mkdir(join(staticDir, "phosphor"), { recursive: true });
 await cp(
