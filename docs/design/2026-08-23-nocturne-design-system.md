@@ -17,13 +17,15 @@ The canonical token sheet and component classes live in the external package the
 
 ## Email layout (reference)
 
-- **Kicker:** fish mono mark + “RESURFACE” (uppercase, muted neutral).
+- **Ground:** the email paints no page background — only the dark rounded card. Gmail's web reading pane stays white even in its dark theme and a body background only fills the content's own height, so a full-bleed dark ground rendered as a slab (dark-on-white-on-dark). The card now floats on whatever the client's pane is: white in Gmail, dark in Apple Mail dark mode.
+- **Kicker:** fish mono mark + “RESURFACE” (uppercase, muted neutral). The mark is a PNG (`/static/icon-mono-56.png`, rendered from `assets/icon/icon-mono.svg`) referenced by absolute URL — Gmail strips inline `<svg>`, and `/static/*` is auth-exempt so image proxies can fetch it. Laid out with a presentation table, not flexbox (email-client support).
 - **Headline:** `{count} prompts · ~{mins} min` — count in text colour, duration muted.
 - **Reason line:** one sentence keyed to `SessionReadyReason` (see `REMINDER_REASON_TEXT` in `src/email.ts`).
-- **CTA:** outlined “Start review” → `${BASE_URL}/` (no token in the link; cookie auth).
+- **CTA:** filled accent “Start review” (dark text on `#9184d9`) → `${BASE_URL}/` (no token in the link; cookie auth). Deliberate exception to the outlined-primary rule: in mail clients a filled block earns its ~44px tap target and survives colour mangling better than a 1px outline.
+- **Divider:** still fades at the ends per the Nocturne rule, but via percentage gradient stops ending in the surface colour (no `calc()`, no `transparent` keyword), with a solid `#434550` fallback for clients that drop gradients.
 - **Footer:** “This is the only email this system sends. It backs off if you're busy.”
 
-Subject line matches the headline: `{count} prompts · ~{mins} min`.
+Subject line matches the headline: `{count} prompts · ~{mins} min`. The Resend payload carries a plain-text part (subject, reason, link, footer) alongside the HTML.
 
 ## Principles to carry into the web UI
 

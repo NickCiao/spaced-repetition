@@ -183,12 +183,22 @@ describe("decideReminder (pure)", () => {
   });
 
   it("compose has no streaks, no token, and reflects the session reason", () => {
-    const { subject, html } = composeReminder(6, "https://sr.example", "forgetting-cost");
+    const { subject, html, text } = composeReminder(6, "https://sr.example", "forgetting-cost");
     expect(subject).toBe("6 prompts · ~2 min");
     expect(html).toContain("https://sr.example/");
     expect(html).toContain("starting to slip");
+    expect(html).toContain("https://sr.example/static/icon-mono-56.png");
     expect(html.toLowerCase()).not.toContain("streak");
     expect(html).not.toContain("token=");
+  });
+
+  it("compose includes a plain-text part mirroring the html", () => {
+    const { text } = composeReminder(6, "https://sr.example", "forgetting-cost");
+    expect(text).toContain("6 prompts · ~2 min");
+    expect(text).toContain("starting to slip");
+    expect(text).toContain("Start review: https://sr.example/");
+    expect(text).not.toContain("token=");
+    expect(text).not.toContain("<");
   });
 
   it("maps each ready reason to supporting copy", () => {

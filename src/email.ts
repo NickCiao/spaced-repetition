@@ -133,25 +133,24 @@ export function reminderReasonText(reason: SessionReadyReason): string {
   return REMINDER_REASON_TEXT[reason];
 }
 
+// Nocturne divider over the card surface, as a solid hex for clients that drop
+// rgba/gradients (rgba(233,237,237,0.16) composited onto #232532).
+const DIVIDER_FALLBACK = "#434550";
+const FONT = "Inter,system-ui,-apple-system,sans-serif";
+
 export function composeReminder(
   count: number, baseUrl: string, reason: SessionReadyReason
-): { subject: string; html: string } {
+): { subject: string; html: string; text: string } {
   const mins = Math.max(1, Math.ceil((count * 20) / 60));
   const countLabel = `${count} prompt${count === 1 ? "" : "s"}`;
   const subject = `${countLabel} · ~${mins} min`;
-  const url = escapeHtml(baseUrl.replace(/\/$/, "") + "/");
+  const base = baseUrl.replace(/\/$/, "");
+  const url = escapeHtml(base + "/");
   const reasonText = escapeHtml(reminderReasonText(reason));
-  // Fish mono mark (see assets/icon/handoff.md); eye knockout faked with the card
-  // surface colour since email clients don't reliably support SVG masks.
-  const icon = `<svg width="14" height="14" viewBox="0 0 64 64" aria-hidden="true" style="display:block">
-    <path d="M6 41 H58" stroke="${NOCTURNE.accent}" stroke-width="3" stroke-linecap="round"/>
-    <g transform="rotate(22 30 33)" fill="${NOCTURNE.accent}">
-      <path d="M40 32 Q51 20 56 22.5 Q58.5 25 50.5 32.5 Q58.5 40 56 42.5 Q51 45 40 33.5 Z"/>
-      <ellipse cx="28" cy="33" rx="14" ry="11.5"/>
-      <circle cx="21" cy="29.5" r="3.2" fill="${NOCTURNE.surface}"/>
-    </g>
-    <path d="M11 6.5 l2 4.9 4.9 2 -4.9 2 -2 4.9 -2 -4.9 -4.9 -2 4.9 -2 z" fill="${NOCTURNE.accent}"/>
-  </svg>`;
+  const footerText = "This is the only email this system sends. It backs off if you're busy.";
+  // Fish mono mark served as a PNG from /static (auth-exempt): Gmail strips inline
+  // <svg>, and image proxies can fetch it. Rendered from assets/icon/icon-mono.svg.
+  const iconUrl = escapeHtml(base + "/static/icon-mono-56.png");
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -159,26 +158,34 @@ export function composeReminder(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(subject)}</title>
 </head>
-<body style="margin:0;padding:24px 16px;background:${NOCTURNE.bg};font-family:Inter,system-ui,-apple-system,sans-serif;color:${NOCTURNE.text};-webkit-font-smoothing:antialiased">
+<body style="margin:0;padding:24px 16px;font-family:${FONT};color:${NOCTURNE.text};-webkit-font-smoothing:antialiased">
 <div style="max-width:440px;margin:0 auto">
   <div style="background:${NOCTURNE.surface};border-radius:8px;padding:22px 24px 20px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
-      ${icon}
-      <span style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:${NOCTURNE.muted}">Resurface</span>
-    </div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px">
+      <tr>
+        <td style="padding-right:8px;vertical-align:middle"><img src="${iconUrl}" width="14" height="14" alt="" style="display:block;border:0"></td>
+        <td style="vertical-align:middle;font-family:${FONT};font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:${NOCTURNE.muted}">Resurface</td>
+      </tr>
+    </table>
     <p style="margin:0 0 12px;font-size:28px;line-height:1.15;font-weight:500;letter-spacing:-0.015em">
       <span style="color:${NOCTURNE.text}">${escapeHtml(countLabel)}</span>
       <span style="color:${NOCTURNE.muted}"> · ~${mins} min</span>
     </p>
     <p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:${NOCTURNE.muted}">${reasonText}</p>
-    <a href="${url}" style="display:inline-block;padding:6px 14px;border:1px solid ${NOCTURNE.accent};border-radius:8px;color:${NOCTURNE.accent};font-size:14px;font-weight:500;line-height:1.2;text-decoration:none">Start review</a>
-    <div style="height:1px;margin:24px 0 16px;background:linear-gradient(to right,transparent,${NOCTURNE.divider} 48px,${NOCTURNE.divider} calc(100% - 48px),transparent)"></div>
-    <p style="margin:0;font-size:11px;line-height:1.45;color:${NOCTURNE.muted}">This is the only email this system sends. It backs off if you're busy.</p>
+    <a href="${url}" style="display:inline-block;padding:12px 24px;background:${NOCTURNE.accent};border-radius:8px;color:${NOCTURNE.bg};font-family:${FONT};font-size:14px;font-weight:600;line-height:1.2;text-decoration:none">Start review</a>
+    <div style="height:1px;margin:24px 0 16px;background-color:${DIVIDER_FALLBACK};background-image:linear-gradient(to right,${NOCTURNE.surface},${DIVIDER_FALLBACK} 12%,${DIVIDER_FALLBACK} 88%,${NOCTURNE.surface})"></div>
+    <p style="margin:0;font-size:11px;line-height:1.45;color:${NOCTURNE.muted}">${escapeHtml(footerText)}</p>
   </div>
 </div>
 </body>
 </html>`;
-  return { subject, html };
+  const text = [
+    subject,
+    reminderReasonText(reason),
+    `Start review: ${base}/`,
+    footerText
+  ].join("\n\n");
+  return { subject, html, text };
 }
 
 /** Resolve mail config: D1 Settings win; optional Worker secrets / .dev.vars remain as fallback. */
@@ -200,12 +207,12 @@ export async function resolveMailConfig(env: Env): Promise<{
 
 async function sendReminder(
   mail: { emailTo: string; resendKey: string; emailFrom: string },
-  subject: string, html: string
+  subject: string, html: string, text: string
 ): Promise<void> {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${mail.resendKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: mail.emailFrom, to: mail.emailTo, subject, html })
+    body: JSON.stringify({ from: mail.emailFrom, to: mail.emailTo, subject, html, text })
   });
   if (!res.ok) throw new Error(`resend ${res.status}: ${await res.text()}`);
 }
@@ -247,8 +254,8 @@ export async function runReminderCron(env: Env, now: Date): Promise<void> {
         hasBaseUrl: Boolean(mail.baseUrl)
       }));
     } else {
-      const { subject, html } = composeReminder(session.dueCount, mail.baseUrl, session.reason);
-      await sendReminder(mail, subject, html);
+      const { subject, html, text } = composeReminder(session.dueCount, mail.baseUrl, session.reason);
+      await sendReminder(mail, subject, html, text);
     }
   }
   await setSetting(env.DB, "cadence", JSON.stringify(d.cadence));
