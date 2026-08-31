@@ -20,7 +20,7 @@ At a high level, this project is one Cloudflare Worker with a few companion UI s
 - Refinement of captured context into retrieval prompts should be meaningfully effortful.
 - Design for sustainable long-term use (e.g. no gamified metrics).
 - You own your data.
-- Built as personal infrastructure.
+- Built as personal infrastructure, not as a service.
 
 
 ## Deploy your own
