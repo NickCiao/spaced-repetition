@@ -1,23 +1,26 @@
 # spaced-repetition
 
-People are _**surprisingly**_ bad at retaining what they read (here's a [really good article](https://andymatuschak.org/books/) on the topic by AndyM).
+People are _**surprisingly**_ bad at retaining what they read (here's a [really good article](https://andymatuschak.org/books/) on the topic by Andy Matuschak).
 
 After searching high and low, there doesn't appear to be any existing flashcard or spaced-repetition app on the market that solves the following problems:
 
-1. Make it low-effort to capture the raw context around something worth remembering (e.g. when reading physical/digital books, pdfs, webpages, conversations with an AI, podcasts, etc). 
-2. Refining that raw context into a pedagogically correct memory prompt (e.g. a flashcard).
-3. Notifying you that it's time for a review session using a spaced-repetition algorithm.
+1. Make it low-effort to capture the raw context around something you'd like to remember (e.g. when reading physical/digital books, pdfs, webpages, conversations with an AI, podcasts, etc). 
+2. Helps you to refine that raw context into a pedagogically correct memory prompt (e.g. a flashcard, or a progressive memory prompt).
+3. Optimizing when you should review your memory prompts by notifying you based on a spaced-repetition algorithm.
 
 I tried [Mochi](https://mochi.cards/) & [Anki](https://apps.ankiweb.net/) (Mochi is Anki with better UI), but they both assume that you're primarily sitting down with the app open, with your focus entirely centered on creating flash cards or reviewing flash cards. These apps also don't notify you on a spaced-repetition schedule.
 
-I've also looked at [Orbit](https://github.com/andymatuschak/orbit). Orbit targets writers building mnemonic-medium texts (like [Quantum Country](https://quantum.country/)). We borrow its session-worthiness scheduling idea, adapted with FSRS instead of a fixed decay heuristic. Orbit's Task maps to our **prompt**; its Scheduler decides when each prompt is due for review and when to notify you.
+Spaced-repetition is heavily inspired by [Orbit](https://github.com/andymatuschak/orbit). However, Orbit is primarily targeting writers who are interested in building mnemonic-medium texts (like [Quantum Country](https://quantum.country/)).
 
-At a high level, this project is one Cloudflare Worker with a few companion surfaces that make memory augmentation an ambient layer over whatever you’re reading or thinking about. The software helps you capture ideas worth remembering from their source context with minimal interruption, refine those raw captures into effective retrieval prompts, and intelligently resurface them for review at the right time so that this becomes a practice that you can sustain for years.
+At a high level, this project is one Cloudflare Worker with a few companion UI surfaces. It helps you captures ideas without interrupting reading, preserves the work of deliberate prompt authoring, and schedules retrieval using a longitudinal model of the learner’s memory.
 
 # Design principles
 
 - Capturing context should be nearly effortless. 
 - Refinement of captured context into retrieval prompts should be meaningfully effortful.
+- Design for sustainable long-term use (e.g. no gamified metrics).
+- You own your data.
+- Built as personal infrastructure.
 
 
 ## Deploy your own
