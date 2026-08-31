@@ -196,7 +196,7 @@ Open once to set the cookie:
 
 Then (optional) enable reminder email in Settings → Reminder:
   paste your Resend API key and destination address.
-  EMAIL_FROM defaults to onboarding@resend.dev (Resend test sender).
+  EMAIL_FROM defaults to "Resurface <onboarding@resend.dev>" (Resend test sender).
   For production, verify a domain in Resend and:
     npx wrangler secret put EMAIL_FROM
 

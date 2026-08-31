@@ -33,7 +33,7 @@ npm install
 npm run setup    # login → D1/R2 → migrate → SR_TOKEN → deploy
 ```
 
-Email is configured in **Settings** after deploy (Resend API key + destination). `EMAIL_FROM` defaults to Resend’s test sender (`onboarding@resend.dev`); you can override this by running `npx wrangler secret put EMAIL_FROM` (after verifying the domain in Resend).
+Email is configured in **Settings** after deploy (Resend API key + destination). `EMAIL_FROM` defaults to Resend’s test sender with a friendly display name (`Resurface <onboarding@resend.dev>`); you can override this by running `npx wrangler secret put EMAIL_FROM` (after verifying the domain in Resend — keep the `Name <address>` format so inboxes show a sender name).
 
 On the phone: open `/capture`, then Share → Add to Home Screen.
 

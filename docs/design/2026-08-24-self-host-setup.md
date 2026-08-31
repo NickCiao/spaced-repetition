@@ -20,7 +20,7 @@ Both paths leave reminder email unset. The app is fully usable without it.
 | `SR_TOKEN` | Worker secret | Only deploy-time secret. Open `/?token=…` once per browser. |
 | App URL (`base_url`) | D1 settings | Learned from the first authenticated request origin; editable in Settings (custom domains). |
 | Email to / Resend API key | D1 settings | Settings → Reminder. Empty ⇒ cron decides “send” but skips the provider call. |
-| `EMAIL_FROM` | Wrangler var / optional secret | Defaults to Resend’s test sender; override with a verified domain for production. |
+| `EMAIL_FROM` | Wrangler var / optional secret | Defaults to `Resurface <onboarding@resend.dev>` (Resend test sender, “Resurface” display name); override with a verified domain for production, keeping the `Name <address>` format. |
 
 Legacy Worker secrets `EMAIL_TO`, `RESEND_API_KEY`, and `BASE_URL` remain as fallbacks so existing deploys keep working until Settings is filled in. Export zip includes scheduler settings and optional `email_to`; it never includes the Resend API key or `base_url`.
 

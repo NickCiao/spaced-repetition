@@ -28,7 +28,7 @@
 		]
 	},
 	"vars": {
-		"EMAIL_FROM": "onboarding@resend.dev"
+		"EMAIL_FROM": "Resurface <onboarding@resend.dev>"
 	},
 	"observability": {
 		"enabled": true,
