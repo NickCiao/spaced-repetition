@@ -11,7 +11,7 @@ The canonical token sheet and component classes live in the external package the
 | Surface | Status | Notes |
 | --- | --- | --- |
 | Reminder email | **Done** | `composeReminder` in `src/email.ts` inlines Nocturne hex values (email clients ignore linked CSS). Supporting line reflects the session-worthiness reason (`full-session`, `waited-too-long`, `forgetting-cost`, `no-better-session-soon`). |
-| Review session | **Done** | `public/static/review.js` + `nocturne-app.css` on Nocturne tokens. Progress dots, End, Reveal/grade bar, inline flag panel, done/nothing-due close screens. App shell (rail + tab bar) always visible on desktop; mobile tab bar hides during active session (`body.in-session`). |
+| Review session | **Done** | `public/static/review.js` + `nocturne-app.css` on Nocturne tokens. Progress dots, End, Reveal/grade bar, inline flag panel, done/nothing-due close screens. App shell (rail + tab bar) always visible on desktop; mobile tab bar hides during active session (`body.in-session`). Review and Inbox nav badges (`rail-due` / `tab-due`) hide at zero; Review updates live as cards are graded. |
 | Web app (other surfaces) | **Done** | Capture, inbox, refine, browse, settings on `nocturne-app.css` + shared shell in `src/html.ts`. Phosphor regular self-hosted under `public/static/phosphor/`. |
 | App icon / favicon | **Done** | Goldfish "resurface" mark (2026-08-26): warm-orange fish (`#f59a49`) arcing over a blurple waterline to catch a memory spark, on the `#161826` ground. Master art + handoff spec in `assets/icon/`; served set (favicon SVG, 192/512 any + maskable PNGs, apple-touch-icon) in `public/static/` and wired via `manifest.webmanifest`. Mono blurple variant used for the rail brand and email kicker. |
 

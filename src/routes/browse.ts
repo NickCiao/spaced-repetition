@@ -2,7 +2,7 @@ import type { Env } from "../env.d";
 import { insertPromptStmt, insertSource, newId, nowIso, type PromptRow, type SourceRow } from "../db";
 import { normalizePromptInput, validatePromptInput } from "../format";
 import { newCardFields } from "../scheduler";
-import { escapeHtml, hostOnly, jsonForScript, page, shellFor } from "../html";
+import { escapeHtml, hostOnly, jsonForScript, navCounts, page, shellFor } from "../html";
 
 export async function browseIndex(env: Env): Promise<Response> {
   const shell = await shellFor(env.DB, "browse");
@@ -261,5 +261,5 @@ export async function deletePrompt(id: string, env: Env): Promise<Response> {
   if (!p) return Response.json({ error: "unknown prompt" }, { status: 404 });
   await env.DB.prepare("DELETE FROM events WHERE prompt_id = ?").bind(id).run();
   await env.DB.prepare("DELETE FROM prompts WHERE id = ?").bind(id).run();
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, ...(await navCounts(env.DB)) });
 }

@@ -1,7 +1,7 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { newId, nowIso } from "../src/db";
-import { AUTH } from "./helpers";
+import { AUTH, wipeData } from "./helpers";
 
 describe("health", () => {
   it("GET /health responds ok without auth", async () => {
@@ -407,5 +407,46 @@ describe("browse, prompt edit, settings", () => {
     const { id } = await res.json() as { id: string };
     const row = await env.DB.prepare("SELECT answer FROM prompts WHERE id = ?").bind(id).first();
     expect(row?.answer).toBe("");
+  });
+});
+
+describe("nav badges", () => {
+  it("omits badges when nothing is due and the inbox is empty", async () => {
+    await wipeData();
+    const html = await (await exports.default.fetch("http://sr/", AUTH)).text();
+    expect(html).toContain('data-nav="review"');
+    expect(html).toContain('data-nav="inbox"');
+    expect(html).not.toContain('class="rail-due"');
+    expect(html).not.toContain('class="tab-due"');
+  });
+
+  it("review badge is due count; inbox badge is pending captures plus flagged prompts", async () => {
+    await wipeData();
+    await seedReviewPrompt("due-one");
+    await seedReviewPrompt("due-two");
+    const dueHtml = await (await exports.default.fetch("http://sr/", AUTH)).text();
+    expect(dueHtml).toMatch(/data-nav="review"[^>]*>[\s\S]*?class="rail-due">2</);
+    expect(dueHtml).toMatch(/data-nav="review"[^>]*>[\s\S]*?class="tab-due">2</);
+    expect(dueHtml).not.toMatch(/data-nav="inbox"[^>]*>[\s\S]*?class="rail-due">/);
+
+    await POST("/api/capture", { text: "inbox-item" });
+    const pid = await seedReviewPrompt("to-flag");
+    const flagged = await POST("/api/grade", { prompt_id: pid, action: "flag", note: "x" });
+    const counts = await flagged.json() as { dueCount: number; inboxCount: number };
+    expect(counts.dueCount).toBe(3); // flag does not leave the due queue
+    expect(counts.inboxCount).toBe(2); // 1 capture + 1 flag
+
+    const html = await (await exports.default.fetch("http://sr/", AUTH)).text();
+    expect(html).toMatch(/data-nav="review"[^>]*>[\s\S]*?class="rail-due">3</);
+    expect(html).toMatch(/data-nav="inbox"[^>]*>[\s\S]*?class="rail-due">2</);
+  });
+
+  it("grading remembered returns a dueCount that dropped the card", async () => {
+    await wipeData();
+    const pid = await seedReviewPrompt();
+    const body = await (await POST("/api/grade", { prompt_id: pid, action: "remembered" }))
+      .json() as { dueCount: number; inboxCount: number };
+    expect(body.dueCount).toBe(0);
+    expect(body.inboxCount).toBe(0);
   });
 });

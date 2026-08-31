@@ -13,7 +13,10 @@
     const res = await fetch("/api/capture", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item)
     });
-    if (res.ok) return;
+    if (res.ok) {
+      if (typeof applyNavCounts === "function") applyNavCounts(await res.json().catch(() => ({})));
+      return;
+    }
     const err = new Error("capture failed " + res.status);
     err.permanent = res.status === 400; // validation rejects never succeed on retry
     throw err;

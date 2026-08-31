@@ -101,6 +101,7 @@
     try {
       const res = await fetch(`/api/prompt/${card.id}/delete`, { method: "POST" });
       if (!res.ok) throw new Error(String(res.status));
+      if (typeof applyNavCounts === "function") applyNavCounts(await res.json().catch(() => ({})));
     } catch {
       alert("Couldn't delete — check your connection and try again.");
       return;
@@ -119,8 +120,9 @@
         body: JSON.stringify({ prompt_id: card.id, action, note })
       });
       if (!res.ok) throw new Error(String(res.status));
-      const { due } = await res.json().catch(() => ({}));
-      if ((action === "remembered" || action === "forgot") && typeof due === "string") gradedDues.push(due);
+      const body = await res.json().catch(() => ({}));
+      if ((action === "remembered" || action === "forgot") && typeof body.due === "string") gradedDues.push(body.due);
+      if (typeof applyNavCounts === "function") applyNavCounts(body);
     } catch {
       alert("Couldn't save that grade — check your connection and try again.");
       return;

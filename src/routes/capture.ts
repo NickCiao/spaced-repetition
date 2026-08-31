@@ -1,7 +1,7 @@
 import type { Env } from "../env.d";
 import { getSettings, newId, nowIso } from "../db";
 import { localDate } from "../clock";
-import { page, shellFor } from "../html";
+import { navCounts, page, shellFor } from "../html";
 
 export async function capturePage(env: Env): Promise<Response> {
   const shell = await shellFor(env.DB, "capture");
@@ -42,7 +42,7 @@ export async function captureApi(request: Request, env: Env): Promise<Response> 
   await env.DB.prepare(
     "INSERT INTO captures (id, created_at, text, url, title, note, image_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
   ).bind(id, nowIso(), text, b?.url ?? null, b?.title ?? null, b?.note ?? null, b?.image_id ?? null).run();
-  return Response.json({ ok: true, id });
+  return Response.json({ ok: true, id, ...(await navCounts(env.DB)) });
 }
 
 export async function capturesToday(env: Env): Promise<Response> {

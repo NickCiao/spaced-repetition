@@ -2,7 +2,7 @@ import type { Env } from "../env.d";
 import { getSettings, nowIso, type PromptRow } from "../db";
 import { applyGrade } from "../scheduler";
 import { buildSession } from "../session";
-import { jsonForScript, page, shellFor } from "../html";
+import { jsonForScript, navCounts, page, shellFor } from "../html";
 
 export async function reviewPage(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -64,5 +64,5 @@ export async function gradeApi(request: Request, env: Env): Promise<Response> {
     "INSERT INTO events (ts, prompt_id, action, elapsed_days, state_after) VALUES (?, ?, ?, ?, ?)"
   ).bind(ts, p.id, b.action, elapsed, stateAfter).run();
 
-  return Response.json({ ok: true, due });
+  return Response.json({ ok: true, due, ...(await navCounts(env.DB, now)) });
 }

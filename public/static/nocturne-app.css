@@ -63,10 +63,17 @@
     var(--color-divider) calc(100% - 48px), transparent);
 }
 .tab {
+  position: relative;
   flex: 1; min-height: 50px; padding: 9px 0 7px;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   font-size: 10px; letter-spacing: 0.04em; text-decoration: none;
   color: color-mix(in srgb, var(--color-text) 58%, transparent);
+}
+.tab-due {
+  position: absolute; top: 5px; left: calc(50% + 6px);
+  min-width: 16px; padding: 0 5px; font-size: 10px; line-height: 16px;
+  text-align: center; letter-spacing: 0; border-radius: 999px;
+  background: var(--color-accent-800); color: var(--color-accent-100);
 }
 .tab i { font-size: 22px; line-height: 1; }
 .tab[aria-current="page"] { color: var(--color-accent); }

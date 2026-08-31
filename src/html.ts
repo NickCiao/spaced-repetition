@@ -28,18 +28,27 @@ const NAV: { page: AppPage; href: string; label: string; icon: string }[] = [
   { page: "settings", href: "/settings", label: "Settings", icon: "ph-gear-six" },
 ];
 
-function navItem(n: typeof NAV[number], active: AppPage, dueCount: number, mobile: boolean): string {
-  const cur = n.page === active ? ` aria-current="page"` : "";
-  const due = n.page === "review" ? `<span class="rail-due">${dueCount}</span>` : "";
-  if (mobile) {
-    return `<a class="tab" href="${n.href}"${cur}><i class="ph ${n.icon}"></i> ${escapeHtml(n.label)}</a>`;
-  }
-  return `<a class="rail-item" href="${n.href}"${cur}><i class="ph ${n.icon}"></i> ${escapeHtml(n.label)} ${due}</a>`;
+export type NavCounts = { dueCount: number; inboxCount: number };
+
+function badgeFor(page: AppPage, counts: NavCounts, mobile: boolean): string {
+  const n = page === "review" ? counts.dueCount : page === "inbox" ? counts.inboxCount : 0;
+  if (n <= 0) return "";
+  const cls = mobile ? "tab-due" : "rail-due";
+  return ` <span class="${cls}">${n}</span>`;
 }
 
-export function shell(active: AppPage, dueCount: number, content: string): string {
-  const railNav = NAV.map(n => navItem(n, active, dueCount, false)).join("\n    ");
-  const tabNav = NAV.map(n => navItem(n, active, dueCount, true)).join("\n  ");
+function navItem(n: typeof NAV[number], active: AppPage, counts: NavCounts, mobile: boolean): string {
+  const cur = n.page === active ? ` aria-current="page"` : "";
+  const badge = badgeFor(n.page, counts, mobile);
+  if (mobile) {
+    return `<a class="tab" href="${n.href}"${cur} data-nav="${n.page}"><i class="ph ${n.icon}"></i> ${escapeHtml(n.label)}${badge}</a>`;
+  }
+  return `<a class="rail-item" href="${n.href}"${cur} data-nav="${n.page}"><i class="ph ${n.icon}"></i> ${escapeHtml(n.label)}${badge}</a>`;
+}
+
+export function shell(active: AppPage, counts: NavCounts, content: string): string {
+  const railNav = NAV.map(n => navItem(n, active, counts, false)).join("\n    ");
+  const tabNav = NAV.map(n => navItem(n, active, counts, true)).join("\n  ");
   return `<aside class="rail">
   <div class="rail-brand">${FISH_MARK} Resurface</div>
   <nav class="rail-nav">
@@ -96,9 +105,20 @@ export function captureCardMeta(
   return parts.join("\n  ");
 }
 
-export async function shellFor(db: D1Database, active: AppPage, now = new Date()) {
+export async function navCounts(db: D1Database, now = new Date()): Promise<NavCounts> {
   const settings = await getSettings(db);
-  return { active, dueCount: await countDue(db, settings.timezone, now) };
+  const dueCount = await countDue(db, settings.timezone, now);
+  const row = await db.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM captures WHERE status = 'pending') +
+       (SELECT COUNT(*) FROM prompts WHERE flag_note IS NOT NULL AND retired = 0) AS n`
+  ).first<{ n: number }>();
+  return { dueCount, inboxCount: row?.n ?? 0 };
+}
+
+export async function shellFor(db: D1Database, active: AppPage, now = new Date()) {
+  const counts = await navCounts(db, now);
+  return { active, ...counts };
 }
 
 const DEFAULT_STYLES = [
@@ -116,12 +136,14 @@ export function page(
     script?: string;
     styles?: string[];
     bodyClass?: string;
-    shell?: { active: AppPage; dueCount: number };
+    shell?: { active: AppPage } & NavCounts;
   } = {}
 ): Response {
   const styles = opts.styles ?? DEFAULT_STYLES;
   const styleLinks = styles.map(href => `<link rel="stylesheet" href="${href}">`).join("\n");
-  const inner = opts.shell ? shell(opts.shell.active, opts.shell.dueCount, body) : body;
+  const inner = opts.shell
+    ? shell(opts.shell.active, { dueCount: opts.shell.dueCount, inboxCount: opts.shell.inboxCount }, body)
+    : body;
   const bodyClass = opts.bodyClass ? ` class="${escapeHtml(opts.bodyClass)}"` : "";
   const html = `<!doctype html>
 <html lang="en">
@@ -139,6 +161,7 @@ ${opts.extraHead ?? ""}
 </head>
 <body${bodyClass}>
 ${inner}
+${opts.shell ? `<script src="/static/nav.js"></script>` : ""}
 ${opts.script ? `<script src="${opts.script}"></script>` : ""}
 </body>
 </html>`;
