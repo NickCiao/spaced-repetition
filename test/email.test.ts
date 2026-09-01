@@ -223,22 +223,22 @@ describe("scheduled handler", () => {
 
   // Storage is isolated per test file, so this file's cron tests see only what they seed
   // (and unseed, so the two cases don't see each other).
-  async function seed(sourceId: string, prompts: { id: string; f: SchedFields }[], now: string) {
-    await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Cron', NULL, '{}', ?)")
-      .bind(sourceId, now).run();
+  async function seed(topicId: string, prompts: { id: string; f: SchedFields }[], now: string) {
+    await env.DB.prepare("INSERT INTO topics (id, name, url, meta, created_at) VALUES (?, 'Cron', NULL, '{}', ?)")
+      .bind(topicId, now).run();
     for (const { id, f } of prompts) {
       await env.DB.prepare(
-        `INSERT INTO prompts (id, source_id, kind, question, answer, position, created_at, updated_at,
+        `INSERT INTO prompts (id, topic_id, kind, question, answer, position, created_at, updated_at,
           due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
          VALUES (?, ?, 'qa', 'q', 'a', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(id, sourceId, now, now, f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
+      ).bind(id, topicId, now, now, f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
         f.reps, f.lapses, f.state, f.last_review).run();
     }
   }
 
-  async function unseed(sourceId: string) {
-    await env.DB.prepare("DELETE FROM prompts WHERE source_id = ?").bind(sourceId).run();
-    await env.DB.prepare("DELETE FROM sources WHERE id = ?").bind(sourceId).run();
+  async function unseed(topicId: string) {
+    await env.DB.prepare("DELETE FROM prompts WHERE topic_id = ?").bind(topicId).run();
+    await env.DB.prepare("DELETE FROM topics WHERE id = ?").bind(topicId).run();
   }
 
   async function pinSettings(tz: string, hour: string) {

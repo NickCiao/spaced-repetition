@@ -55,7 +55,7 @@ function hasAnkiDb(files: Record<string, Uint8Array>): boolean {
 export async function importForeign(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const apply = url.searchParams.get("apply") === "1";
-  const fallbackSource = url.searchParams.get("source")?.trim() || "Anki import";
+  const fallbackTopic = url.searchParams.get("topic")?.trim() || "Anki import";
   const buf = new Uint8Array(await request.arrayBuffer());
   if (!buf.length) return Response.json({ errors: ["empty upload"] }, { status: 400 });
 
@@ -87,7 +87,7 @@ export async function importForeign(request: Request, env: Env): Promise<Respons
     if (!text.includes("\t") && !text.includes("#separator")) {
       return Response.json({ errors: ["expected Anki plain-text TSV or Mochi .mochi zip"] }, { status: 400 });
     }
-    const data = parseAnkiTsv(text, fallbackSource);
+    const data = parseAnkiTsv(text, fallbackTopic);
     const result = await applyForeignImport(env, data, new Date(), apply);
     return Response.json(apply ? { applied: result } : { preview: result });
   } catch (e) {

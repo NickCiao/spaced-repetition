@@ -28,7 +28,7 @@ else
 fi
 
 echo "Wiping remote D1 ($D1_NAME)..."
-for table in events prompts sources captures assets; do
+for table in events prompts topics captures assets; do
   echo "  DELETE FROM $table"
   npx wrangler d1 execute "$D1_NAME" --remote --command "DELETE FROM $table;"
 done

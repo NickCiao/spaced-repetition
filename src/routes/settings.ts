@@ -60,9 +60,9 @@ export async function settingsPage(env: Env): Promise<Response> {
       <label class="btn btn-secondary">Choose file<input type="file" id="import-file" hidden></label>
     </div>
     <div class="import-slot" id="import-slot">
-      <div class="field" id="foreign-source-wrap">
-        <label for="foreignsource">Source name (headerless Anki export)</label>
-        <input class="input" type="text" id="foreignsource" value="Anki import">
+      <div class="field" id="foreign-topic-wrap">
+        <label for="foreigntopic">Topic name (headerless Anki export)</label>
+        <input class="input" type="text" id="foreigntopic" value="Anki import">
       </div>
     </div>
     <p class="import-consequence" id="import-consequence">Can edit, add, and retire existing prompts — preview first.</p>

@@ -65,13 +65,22 @@
     if (aField) aField.style.display = kind === "cloze" ? "none" : "";
   }
 
+  let picker;
+
   function render() {
     root.innerHTML = `
 <div class="form">
-  <div class="field">
-    <label for="src-name">Source</label>
-    <input class="input" type="text" id="src-name" list="source-list" value="${esc(root.dataset.sourceName)}">
-    <datalist id="source-list"></datalist>
+  <div class="form-grid">
+    <div class="field">
+      <label for="topic">Topic</label>
+      <div class="topic-picker" id="topic-picker">
+        <input class="input" type="text" id="topic" value="${esc(root.dataset.topicName)}" placeholder="New or existing topic" autocomplete="off">
+      </div>
+    </div>
+    <div class="field">
+      <label for="psource">Source <span class="note">— optional</span></label>
+      <input class="input" type="text" id="psource" value="${esc(root.dataset.source)}" placeholder="[Title](https://…) or plain text" autocomplete="off">
+    </div>
   </div>
   <div id="forms">${promptForm()}</div>
   <div class="form-actions">
@@ -81,12 +90,8 @@
   <p class="flash" id="flash"></p>
 </div>`;
 
-    document.getElementById("src-name").oninput = async (e) => {
-      const res = await fetch(`/api/sources?q=${encodeURIComponent(e.target.value)}`);
-      const { items } = await res.json();
-      document.getElementById("source-list").innerHTML =
-        items.map((s) => `<option value="${esc(s.name)}">`).join("");
-    };
+    picker = window.topicPicker(document.getElementById("topic-picker"));
+    picker.resolveInitial(); // a guessed name that matches an existing topic picks it up, canonical casing included
     document.getElementById("add").onclick = () =>
       document.getElementById("forms").insertAdjacentHTML("beforeend", promptForm());
     document.getElementById("save").onclick = save;
@@ -139,11 +144,13 @@
     try {
       const cards = [...document.querySelectorAll("#forms .card")].map(collect)
         .filter((p) => p.question.trim());
+      const topic = picker.get();
       const res = await fetch("/api/refine", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           capture_id: root.dataset.capture,
-          source: { name: document.getElementById("src-name").value, url: root.dataset.sourceUrl || undefined },
+          topic: topic.id ? { id: topic.id } : { name: topic.name },
+          source: document.getElementById("psource").value.trim() || undefined,
           prompts: cards
         })
       });

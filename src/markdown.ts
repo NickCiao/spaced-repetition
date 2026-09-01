@@ -8,7 +8,7 @@ const preclean = (text: string) => text.replace(/⁣/g, "");
 // markdown pass (so marked can't mangle them) and re-inserted afterwards.
 const SLOT = (i: number) => `\u2063SR${i}\u2063`; // invisible separator, survives marked untouched
 
-function renderWithSlots(text: string, slots: string[]): string {
+function makeMarked(): Marked {
   const marked = new Marked({ gfm: true, breaks: false });
   marked.use({
     renderer: {
@@ -27,7 +27,11 @@ function renderWithSlots(text: string, slots: string[]): string {
       }
     }
   });
-  let html = marked.parse(text) as string;
+  return marked;
+}
+
+function renderWithSlots(text: string, slots: string[]): string {
+  let html = makeMarked().parse(text) as string;
   slots.forEach((frag, i) => { html = html.split(SLOT(i)).join(frag); });
   return html;
 }
@@ -48,6 +52,17 @@ export function renderMarkdown(text: string): string {
   text = preclean(text);
   const slots: string[] = [];
   return renderWithSlots(extractMath(text, slots), slots);
+}
+
+/**
+ * Inline-only markdown (links, emphasis, code, math) for a prompt's one-line
+ * source attribution — no <p> wrapper, so it can sit inside "from …".
+ */
+export function renderSourceLine(source: string): string {
+  const slots: string[] = [];
+  let html = makeMarked().parseInline(extractMath(preclean(source), slots)) as string;
+  slots.forEach((frag, i) => { html = html.split(SLOT(i)).join(frag); });
+  return html;
 }
 
 function renderCloze(text: string, mode: "mask" | "reveal"): string {

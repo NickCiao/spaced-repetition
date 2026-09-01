@@ -70,12 +70,16 @@ export function hostOnly(url: string): string {
 }
 
 export function captureRowMeta(
-  c: { title?: string | null; url?: string | null; created_at: string },
+  c: { title?: string | null; url?: string | null; topic?: string | null; created_at: string },
   tz: string
 ): string {
   const parts: string[] = [];
+  if (c.topic) parts.push(`<span>topic: ${escapeHtml(c.topic)}</span>`);
   const label = c.title ?? c.url ?? "";
-  if (label) parts.push(`<span>${escapeHtml(label)}</span>`);
+  if (label) {
+    if (parts.length) parts.push("<span>·</span>");
+    parts.push(`<span>${escapeHtml(label)}</span>`);
+  }
   const date = humanDate(c.created_at, tz);
   if (date) {
     if (parts.length) parts.push("<span>·</span>");
@@ -85,16 +89,17 @@ export function captureRowMeta(
 }
 
 export function captureCardMeta(
-  c: { title?: string | null; url?: string | null; created_at: string; note?: string | null },
+  c: { title?: string | null; url?: string | null; topic?: string | null; created_at: string; note?: string | null },
   tz: string
 ): string {
   const parts: string[] = [];
   if (c.note) parts.push(`<span class="card-meta">note: ${escapeHtml(c.note)}</span>`);
   const srcParts: string[] = [];
+  if (c.topic) srcParts.push(`topic: ${escapeHtml(c.topic)}`);
   if (c.url && /^https?:\/\//i.test(c.url)) {
-    srcParts.push(`<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener">${escapeHtml(c.title ?? c.url)}</a>`);
+    srcParts.push(`${srcParts.length ? " · " : ""}<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener">${escapeHtml(c.title ?? c.url)}</a>`);
   } else if (c.title) {
-    srcParts.push(escapeHtml(c.title));
+    srcParts.push(`${srcParts.length ? " · " : ""}${escapeHtml(c.title)}`);
   }
   const date = humanDate(c.created_at, tz);
   if (date) {
@@ -133,7 +138,7 @@ export function page(
   body: string,
   opts: {
     extraHead?: string;
-    script?: string;
+    script?: string | string[];
     styles?: string[];
     bodyClass?: string;
     shell?: { active: AppPage } & NavCounts;
@@ -162,7 +167,8 @@ ${opts.extraHead ?? ""}
 <body${bodyClass}>
 ${inner}
 ${opts.shell ? `<script src="/static/nav.js"></script>` : ""}
-${opts.script ? `<script src="${opts.script}"></script>` : ""}
+${(Array.isArray(opts.script) ? opts.script : opts.script ? [opts.script] : [])
+  .map(s => `<script src="${s}"></script>`).join("\n")}
 </body>
 </html>`;
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });

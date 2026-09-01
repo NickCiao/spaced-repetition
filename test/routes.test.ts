@@ -55,16 +55,16 @@ const POST = (path: string, body: unknown) =>
     body: JSON.stringify(body)
   });
 
-async function seedReviewPrompt(question = "rev-q") {
-  const sid = newId(), pid = newId();
+async function seedReviewPrompt(question = "rev-q", source: string | null = null) {
+  const tid = newId(), pid = newId();
   const past = new Date(Date.now() - 86400_000).toISOString();
-  await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Rev Src', NULL, '{}', ?)")
-    .bind(sid, nowIso()).run();
+  await env.DB.prepare("INSERT INTO topics (id, name, url, meta, created_at) VALUES (?, 'Rev Topic', NULL, '{}', ?)")
+    .bind(tid, nowIso()).run();
   await env.DB.prepare(
-    `INSERT INTO prompts (id, source_id, kind, question, answer, position, created_at, updated_at,
+    `INSERT INTO prompts (id, topic_id, kind, question, answer, source, position, created_at, updated_at,
       due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
-     VALUES (?, ?, 'qa', ?, 'rev-a', 0, ?, ?, ?, 3, 5, 0, 3, 1, 0, 2, ?)`
-  ).bind(pid, sid, question, nowIso(), nowIso(), past, past).run();
+     VALUES (?, ?, 'qa', ?, 'rev-a', ?, 0, ?, ?, ?, 3, 5, 0, 3, 1, 0, 2, ?)`
+  ).bind(pid, tid, question, source, nowIso(), nowIso(), past, past).run();
   return pid;
 }
 
@@ -79,6 +79,20 @@ describe("review", () => {
     expect(html).toContain(pid);
     expect(html).toContain("class=\"rail\"");
     expect(html).toContain("nocturne-app.css");
+  });
+
+  it("session cards carry the topic name and rendered source attribution", async () => {
+    await wipeData();
+    await seedReviewPrompt("attributed-q", "[Paper](https://ex.com/p)");
+    const html = await (await exports.default.fetch("http://sr/", AUTH)).text();
+    expect(html).toContain('"topicName":"Rev Topic"');
+    expect(html).toContain('rel=\\"noopener\\"'); // sourceHtml is server-rendered markdown
+    expect(html).toContain("Paper");
+
+    await wipeData();
+    await seedReviewPrompt("bare-q");
+    const bare = await (await exports.default.fetch("http://sr/", AUTH)).text();
+    expect(bare).toContain('"sourceHtml":null');
   });
 
   it("grading remembered pushes due forward and logs an event", async () => {
@@ -134,13 +148,14 @@ describe("review", () => {
 });
 
 describe("capture", () => {
-  it("POST /api/capture stores a pending capture", async () => {
-    const res = await POST("/api/capture", { text: "worth remembering", url: "https://ex.com/a", title: "Ex" });
+  it("POST /api/capture stores a pending capture with its topic hint", async () => {
+    const res = await POST("/api/capture", { text: "worth remembering", url: "https://ex.com/a", title: "Ex", topic: "Decision Making" });
     expect(res.status).toBe(200);
     const { id } = await res.json() as { id: string };
     const row = await env.DB.prepare("SELECT * FROM captures WHERE id = ?").bind(id).first();
     expect(row?.status).toBe("pending");
     expect(row?.title).toBe("Ex");
+    expect(row?.topic).toBe("Decision Making");
   });
 
   it("rejects empty text", async () => {
@@ -154,16 +169,26 @@ describe("capture", () => {
     expect(items.some(i => i.text === "today-item")).toBe(true);
   });
 
-  it("source autocomplete matches by substring", async () => {
-    await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Thinking in Bets', NULL, '{}', ?)")
-      .bind(newId(), nowIso()).run();
-    const res = await exports.default.fetch("http://sr/api/sources?q=bets", AUTH);
-    const { items } = await res.json() as { items: { name: string }[] };
-    expect(items.some(i => i.name === "Thinking in Bets")).toBe(true);
+  it("GET /api/topics lists every topic, most recently used first", async () => {
+    await wipeData();
+    const old = newId(), fresh = newId();
+    await env.DB.prepare("INSERT INTO topics (id, name, url, meta, created_at) VALUES (?, 'Old Topic', NULL, '{}', '2020-01-01T00:00:00Z')")
+      .bind(old).run();
+    await env.DB.prepare("INSERT INTO topics (id, name, url, meta, created_at) VALUES (?, 'Fresh Topic', NULL, '{}', '2021-01-01T00:00:00Z')")
+      .bind(fresh).run();
+    // A prompt touched now bumps the old topic above the newer-but-idle one.
+    await POST("/api/prompt", { topic_id: old, kind: "qa", question: "bump?", answer: "yes" });
+    const res = await exports.default.fetch("http://sr/api/topics", AUTH);
+    const { items } = await res.json() as { items: { id: string; name: string; count: number }[] };
+    expect(items.map(i => i.name)).toEqual(["Old Topic", "Fresh Topic"]);
+    expect(items[0].count).toBe(1);
+    expect(items[1].count).toBe(0);
   });
 
   it("serves capture page and sw.js (sw without auth)", async () => {
-    expect((await exports.default.fetch("http://sr/capture", AUTH)).status).toBe(200);
+    const cap = await exports.default.fetch("http://sr/capture", AUTH);
+    expect(cap.status).toBe(200);
+    expect(await cap.text()).toContain("topic-picker.js");
     const sw = await exports.default.fetch("http://sr/sw.js");
     expect(sw.status).toBe(200);
     expect(sw.headers.get("Content-Type") ?? "").toContain("javascript");
@@ -171,8 +196,8 @@ describe("capture", () => {
 });
 
 describe("inbox and refine", () => {
-  async function seedCapture(text = "cap-text") {
-    const res = await POST("/api/capture", { text, url: "https://src.example/x", title: "Cap Title" });
+  async function seedCapture(text = "cap-text", extra: Record<string, unknown> = {}) {
+    const res = await POST("/api/capture", { text, url: "https://src.example/x", title: "Cap Title", ...extra });
     return (await res.json() as { id: string }).id;
   }
 
@@ -187,11 +212,25 @@ describe("inbox and refine", () => {
     expect(html).toContain("unclear");
   });
 
-  it("refine creates prompts as new cards and consumes the capture", async () => {
+  it("refine page pre-fills the topic and a markdown-link source guess", async () => {
+    const cid = await seedCapture("prefill-cap", { topic: "My Topic" });
+    const html = await (await exports.default.fetch(`http://sr/refine/${cid}`, AUTH)).text();
+    expect(html).toContain('data-topic-name="My Topic"');
+    expect(html).toContain('data-source="[Cap Title](https://src.example/x)"');
+  });
+
+  it("legacy captures fall back to title as the topic guess", async () => {
+    const cid = await seedCapture("legacy-cap"); // title, no topic — like pre-rename rows
+    const html = await (await exports.default.fetch(`http://sr/refine/${cid}`, AUTH)).text();
+    expect(html).toContain('data-topic-name="Cap Title"');
+  });
+
+  it("refine creates prompts as new cards, stamps the source, and consumes the capture", async () => {
     const cid = await seedCapture();
     const res = await POST("/api/refine", {
       capture_id: cid,
-      source: { name: "Refine Book", url: "https://src.example/x" },
+      topic: { name: "Refine Topic" },
+      source: "[Cap Title](https://src.example/x)",
       prompts: [
         { kind: "qa", question: "RQ1?", answer: "RA1" },
         { kind: "cloze", question: "The {{answer}} is here.", answer: "" }
@@ -203,17 +242,45 @@ describe("inbox and refine", () => {
     const p = await env.DB.prepare("SELECT * FROM prompts WHERE id = ?").bind(prompt_ids[0]).first();
     expect(p?.reps).toBe(0);
     expect(p?.state).toBe(0);
+    expect(p?.source).toBe("[Cap Title](https://src.example/x)");
+    const p2 = await env.DB.prepare("SELECT source FROM prompts WHERE id = ?").bind(prompt_ids[1]).first();
+    expect(p2?.source).toBe("[Cap Title](https://src.example/x)"); // one capture, one provenance
     const cap = await env.DB.prepare("SELECT status FROM captures WHERE id = ?").bind(cid).first();
     expect(cap?.status).toBe("consumed");
-    const again = await POST("/api/refine", { capture_id: cid, source: { name: "X" }, prompts: [{ kind: "qa", question: "q", answer: "a" }] });
+    const again = await POST("/api/refine", { capture_id: cid, topic: { name: "X" }, prompts: [{ kind: "qa", question: "q", answer: "a" }] });
     expect(again.status).toBe(409);
   });
 
-  it("refine validation: no prompts, cloze without spans, qa without answer", async () => {
+  it("refine accepts a topic id directly and rejects unknown ids", async () => {
+    const { id: tid } = await (await POST("/api/topic", { name: "By Id" })).json() as { id: string };
+    const cid = await seedCapture("by-id-cap");
+    const res = await POST("/api/refine", {
+      capture_id: cid, topic: { id: tid }, prompts: [{ kind: "qa", question: "iq?", answer: "ia" }]
+    });
+    expect(res.status).toBe(200);
+    const { prompt_ids } = await res.json() as { prompt_ids: string[] };
+    const p = await env.DB.prepare("SELECT topic_id, source FROM prompts WHERE id = ?").bind(prompt_ids[0]).first();
+    expect(p?.topic_id).toBe(tid);
+    expect(p?.source).toBeNull(); // omitted source stays null
+
+    const cid2 = await seedCapture("bad-id-cap");
+    const bad = await POST("/api/refine", {
+      capture_id: cid2, topic: { id: "zzzzzzzzzz" }, prompts: [{ kind: "qa", question: "q?", answer: "a" }]
+    });
+    expect(bad.status).toBe(404);
+    const still = await env.DB.prepare("SELECT status FROM captures WHERE id = ?").bind(cid2).first();
+    expect(still?.status).toBe("pending"); // rejected before the capture was consumed
+  });
+
+  it("refine validation: no prompts, cloze without spans, qa without answer, multi-line source", async () => {
     const cid = await seedCapture();
-    expect((await POST("/api/refine", { capture_id: cid, source: { name: "S" }, prompts: [] })).status).toBe(400);
-    expect((await POST("/api/refine", { capture_id: cid, source: { name: "S" }, prompts: [{ kind: "cloze", question: "no spans", answer: "" }] })).status).toBe(400);
-    expect((await POST("/api/refine", { capture_id: cid, source: { name: "S" }, prompts: [{ kind: "qa", question: "q?", answer: "" }] })).status).toBe(400);
+    expect((await POST("/api/refine", { capture_id: cid, topic: { name: "T" }, prompts: [] })).status).toBe(400);
+    expect((await POST("/api/refine", { capture_id: cid, topic: { name: "T" }, prompts: [{ kind: "cloze", question: "no spans", answer: "" }] })).status).toBe(400);
+    expect((await POST("/api/refine", { capture_id: cid, topic: { name: "T" }, prompts: [{ kind: "qa", question: "q?", answer: "" }] })).status).toBe(400);
+    expect((await POST("/api/refine", {
+      capture_id: cid, topic: { name: "T" }, source: "two\nlines",
+      prompts: [{ kind: "qa", question: "q?", answer: "a" }]
+    })).status).toBe(400);
   });
 
   it("capture delete removes pending capture", async () => {
@@ -231,26 +298,26 @@ describe("inbox and refine", () => {
     expect(body.answerHtml).toContain("this");
   });
 
-  it("refine dedupes source names case-insensitively, like /api/source", async () => {
-    const { id: sid } = await (await POST("/api/source", { name: "Case Src" })).json() as { id: string };
+  it("refine dedupes topic names case-insensitively, like /api/topic", async () => {
+    const { id: tid } = await (await POST("/api/topic", { name: "Case Topic" })).json() as { id: string };
     const cid = await seedCapture("case-cap");
     const res = await POST("/api/refine", {
       capture_id: cid,
-      source: { name: "case src" },
+      topic: { name: "case topic" },
       prompts: [{ kind: "qa", question: "cq?", answer: "ca" }]
     });
     expect(res.status).toBe(200);
     const { prompt_ids } = await res.json() as { prompt_ids: string[] };
-    const p = await env.DB.prepare("SELECT source_id FROM prompts WHERE id = ?").bind(prompt_ids[0]).first();
-    expect(p?.source_id).toBe(sid);
-    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM sources WHERE name = ? COLLATE NOCASE")
-      .bind("Case Src").first<{ n: number }>();
+    const p = await env.DB.prepare("SELECT topic_id FROM prompts WHERE id = ?").bind(prompt_ids[0]).first();
+    expect(p?.topic_id).toBe(tid);
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM topics WHERE name = ? COLLATE NOCASE")
+      .bind("Case Topic").first<{ n: number }>();
     expect(n?.n).toBe(1);
   });
 
   it("concurrent refines of one capture create prompts exactly once", async () => {
     const cid = await seedCapture("race-me");
-    const body = { capture_id: cid, source: { name: "Race Src" }, prompts: [{ kind: "qa", question: "rq?", answer: "ra" }] };
+    const body = { capture_id: cid, topic: { name: "Race Topic" }, prompts: [{ kind: "qa", question: "rq?", answer: "ra" }] };
     const [r1, r2] = await Promise.all([POST("/api/refine", body), POST("/api/refine", body)]);
     expect([r1.status, r2.status].sort()).toEqual([200, 409]);
     const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM prompts WHERE question = 'rq?'").first();
@@ -261,9 +328,9 @@ describe("inbox and refine", () => {
 describe("browse, prompt edit, settings", () => {
   it("editing a prompt preserves its schedule", async () => {
     const pid = await seedReviewPrompt("before-edit");
-    const before = await env.DB.prepare("SELECT due, source_id FROM prompts WHERE id = ?").bind(pid).first();
+    const before = await env.DB.prepare("SELECT due, topic_id FROM prompts WHERE id = ?").bind(pid).first();
     const res = await POST("/api/prompt", {
-      id: pid, source_id: before!.source_id, kind: "qa",
+      id: pid, topic_id: before!.topic_id, kind: "qa",
       question: "after-edit?", answer: "new answer", clear_flag: true
     });
     expect(res.status).toBe(200);
@@ -273,67 +340,87 @@ describe("browse, prompt edit, settings", () => {
     expect(after?.flag_note).toBeNull();
   });
 
-  it("creates a prompt directly under a source (new card)", async () => {
-    const sid = newId();
-    await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Direct Src', NULL, '{}', ?)")
-      .bind(sid, nowIso()).run();
-    const res = await POST("/api/prompt", { source_id: sid, kind: "qa", question: "direct?", answer: "yes" });
+  it("editing a prompt sets and clears its source", async () => {
+    const pid = await seedReviewPrompt("source-edit");
+    const before = await env.DB.prepare("SELECT topic_id FROM prompts WHERE id = ?").bind(pid).first();
+    await POST("/api/prompt", {
+      id: pid, topic_id: before!.topic_id, kind: "qa",
+      question: "q?", answer: "a", source: "  [Doc](https://ex.com/d)  "
+    });
+    let row = await env.DB.prepare("SELECT source FROM prompts WHERE id = ?").bind(pid).first();
+    expect(row?.source).toBe("[Doc](https://ex.com/d)"); // trimmed
+    await POST("/api/prompt", {
+      id: pid, topic_id: before!.topic_id, kind: "qa", question: "q?", answer: "a", source: "  "
+    });
+    row = await env.DB.prepare("SELECT source FROM prompts WHERE id = ?").bind(pid).first();
+    expect(row?.source).toBeNull(); // blank clears
+    const bad = await POST("/api/prompt", {
+      id: pid, topic_id: before!.topic_id, kind: "qa", question: "q?", answer: "a", source: "a\nb"
+    });
+    expect(bad.status).toBe(400);
+  });
+
+  it("creates a prompt directly under a topic (new card)", async () => {
+    const tid = newId();
+    await env.DB.prepare("INSERT INTO topics (id, name, url, meta, created_at) VALUES (?, 'Direct Topic', NULL, '{}', ?)")
+      .bind(tid, nowIso()).run();
+    const res = await POST("/api/prompt", { topic_id: tid, kind: "qa", question: "direct?", answer: "yes" });
     const { id } = await res.json() as { id: string };
     const row = await env.DB.prepare("SELECT reps, state FROM prompts WHERE id = ?").bind(id).first();
     expect(row?.reps).toBe(0);
-    const html = await (await exports.default.fetch(`http://sr/browse/${sid}`, AUTH)).text();
+    const html = await (await exports.default.fetch(`http://sr/browse/${tid}`, AUTH)).text();
     expect(html).toContain("direct?");
-    expect(html).toContain(`/?source=${sid}`);
+    expect(html).toContain(`/?topic=${tid}`);
   });
 
-  it("browse index lists sources with counts", async () => {
+  it("browse index lists topics with counts", async () => {
     const html = await (await exports.default.fetch("http://sr/browse", AUTH)).text();
-    expect(html).toContain("Direct Src");
+    expect(html).toContain("Direct Topic");
   });
 
-  it("POST /api/source creates a source usable by browse and prompt/new", async () => {
-    const res = await POST("/api/source", { name: "Manual Src", url: "https://manual.example/x" });
+  it("POST /api/topic creates a topic usable by browse and prompt/new", async () => {
+    const res = await POST("/api/topic", { name: "Manual Topic", url: "https://manual.example/x" });
     expect(res.status).toBe(200);
     const body = await res.json() as { ok: boolean; id: string; existed: boolean };
     expect(body.existed).toBe(false);
-    const row = await env.DB.prepare("SELECT name, url FROM sources WHERE id = ?").bind(body.id).first();
-    expect(row?.name).toBe("Manual Src");
+    const row = await env.DB.prepare("SELECT name, url FROM topics WHERE id = ?").bind(body.id).first();
+    expect(row?.name).toBe("Manual Topic");
     expect(row?.url).toBe("https://manual.example/x");
     const browse = await (await exports.default.fetch("http://sr/browse", AUTH)).text();
-    expect(browse).toContain("Manual Src");
-    const form = await exports.default.fetch(`http://sr/prompt/new?source=${body.id}`, AUTH);
+    expect(browse).toContain("Manual Topic");
+    const form = await exports.default.fetch(`http://sr/prompt/new?topic=${body.id}`, AUTH);
     expect(form.status).toBe(200);
-    expect(await form.text()).toContain("Manual Src");
+    expect(await form.text()).toContain("Manual Topic");
   });
 
-  it("POST /api/source rejects a missing or whitespace name", async () => {
-    expect((await POST("/api/source", {})).status).toBe(400);
-    const ws = await POST("/api/source", { name: "   " });
+  it("POST /api/topic rejects a missing or whitespace name", async () => {
+    expect((await POST("/api/topic", {})).status).toBe(400);
+    const ws = await POST("/api/topic", { name: "   " });
     expect(ws.status).toBe(400);
-    expect((await ws.json() as { error: string }).error).toBe("source name required");
+    expect((await ws.json() as { error: string }).error).toBe("topic name required");
   });
 
-  it("POST /api/source dedupes by name case-insensitively", async () => {
-    const first = await (await POST("/api/source", { name: "Dedupe Src" })).json() as { id: string };
-    const again = await (await POST("/api/source", { name: "dedupe src" })).json() as { id: string; existed: boolean };
+  it("POST /api/topic dedupes by name case-insensitively", async () => {
+    const first = await (await POST("/api/topic", { name: "Dedupe Topic" })).json() as { id: string };
+    const again = await (await POST("/api/topic", { name: "dedupe topic" })).json() as { id: string; existed: boolean };
     expect(again.existed).toBe(true);
     expect(again.id).toBe(first.id);
-    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM sources WHERE name = ? COLLATE NOCASE")
-      .bind("Dedupe Src").first<{ n: number }>();
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM topics WHERE name = ? COLLATE NOCASE")
+      .bind("Dedupe Topic").first<{ n: number }>();
     expect(n?.n).toBe(1);
   });
 
-  it("browse index inlines source names script-safely", async () => {
-    await POST("/api/source", { name: "</script><script>alert(1)</script>" });
+  it("browse index inlines topic names script-safely", async () => {
+    await POST("/api/topic", { name: "</script><script>alert(1)</script>" });
     const html = await (await exports.default.fetch("http://sr/browse", AUTH)).text();
     expect(html).not.toContain("</script><script>alert(1)");
     expect(html).toContain("\\u003c/script>\\u003cscript>alert(1)");
   });
 
-  it("empty source page shows the + Prompt call to action", async () => {
-    const { id } = await (await POST("/api/source", { name: "Empty Src" })).json() as { id: string };
+  it("empty topic page shows the + Prompt call to action", async () => {
+    const { id } = await (await POST("/api/topic", { name: "Empty Topic" })).json() as { id: string };
     const html = await (await exports.default.fetch(`http://sr/browse/${id}`, AUTH)).text();
-    expect(html).toContain(`/prompt/new?source=${id}`);
+    expect(html).toContain(`/prompt/new?topic=${id}`);
     expect(html).toContain("No prompts yet");
   });
 
@@ -380,18 +467,18 @@ describe("browse, prompt edit, settings", () => {
     expect(cleared?.value).toBe("");
   });
 
-  it("prompt/new rejects malformed or unknown source ids", async () => {
-    const evil = await exports.default.fetch(`http://sr/prompt/new?source=${encodeURIComponent('x"><script>1</script>')}`, AUTH);
+  it("prompt/new rejects malformed or unknown topic ids", async () => {
+    const evil = await exports.default.fetch(`http://sr/prompt/new?topic=${encodeURIComponent('x"><script>1</script>')}`, AUTH);
     expect(evil.status).toBe(404);
-    const unknown = await exports.default.fetch("http://sr/prompt/new?source=zzzzzzzzzz", AUTH);
+    const unknown = await exports.default.fetch("http://sr/prompt/new?topic=zzzzzzzzzz", AUTH);
     expect(unknown.status).toBe(404);
   });
 
-  it("javascript: source urls never render as links", async () => {
-    const sid = newId();
-    await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Sketchy', 'javascript:alert(1)', '{}', ?)")
-      .bind(sid, nowIso()).run();
-    const html = await (await exports.default.fetch(`http://sr/browse/${sid}`, AUTH)).text();
+  it("javascript: topic urls never render as links", async () => {
+    const tid = newId();
+    await env.DB.prepare("INSERT INTO topics (id, name, url, meta, created_at) VALUES (?, 'Sketchy', 'javascript:alert(1)', '{}', ?)")
+      .bind(tid, nowIso()).run();
+    const html = await (await exports.default.fetch(`http://sr/browse/${tid}`, AUTH)).text();
     expect(html).not.toContain('href="javascript:');
   });
 
@@ -401,9 +488,9 @@ describe("browse, prompt edit, settings", () => {
   });
 
   it("cloze answers are normalized to empty", async () => {
-    const sid2 = newId();
-    await env.DB.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, 'Cz', NULL, '{}', ?)").bind(sid2, nowIso()).run();
-    const res = await POST("/api/prompt", { source_id: sid2, kind: "cloze", question: "Hide {{x}}.", answer: "junk" });
+    const tid2 = newId();
+    await env.DB.prepare("INSERT INTO topics (id, name, url, meta, created_at) VALUES (?, 'Cz', NULL, '{}', ?)").bind(tid2, nowIso()).run();
+    const res = await POST("/api/prompt", { topic_id: tid2, kind: "cloze", question: "Hide {{x}}.", answer: "junk" });
     const { id } = await res.json() as { id: string };
     const row = await env.DB.prepare("SELECT answer FROM prompts WHERE id = ?").bind(id).first();
     expect(row?.answer).toBe("");

@@ -291,8 +291,8 @@
     if (mode === "native") {
       res = await fetch("/import?apply=" + apply, { method: "POST", body: f });
     } else {
-      const source = encodeURIComponent(document.getElementById("foreignsource").value.trim() || "Anki import");
-      res = await fetch("/import/foreign?apply=" + apply + "&source=" + source, { method: "POST", body: f });
+      const topic = encodeURIComponent(document.getElementById("foreigntopic").value.trim() || "Anki import");
+      res = await fetch("/import/foreign?apply=" + apply + "&topic=" + topic, { method: "POST", body: f });
     }
     importOut.textContent = JSON.stringify(await res.json(), null, 2);
   });

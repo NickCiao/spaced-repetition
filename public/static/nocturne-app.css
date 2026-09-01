@@ -175,12 +175,30 @@ button.seg-opt { background: none; border: 0; color: inherit; font: inherit; }
 .prompt-editor { gap: var(--space-3); }
 .prompt-editor-foot { display: flex; justify-content: space-between; align-items: center; }
 
-/* ── source detail ─────────────────────────────────────────────────── */
-.source-title { margin-bottom: 2px; }
-.source-url { margin: 0; font-size: 13px; }
-.source-url a { color: color-mix(in srgb, var(--color-text) 50%, transparent); }
-.source-url a:hover { color: var(--color-accent); }
-.source-actions {
+/* ── topic picker ──────────────────────────────────────────────────── */
+.topic-picker { position: relative; }
+.topic-menu {
+  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0;
+  max-height: 260px; overflow-y: auto; padding: 4px;
+  background: var(--color-surface); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+.topic-opt {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: 8px 10px; border-radius: calc(var(--radius-md) * 0.75);
+  font-size: 14px; cursor: pointer; user-select: none;
+}
+.topic-opt:hover, .topic-opt.active { background: color-mix(in srgb, var(--color-accent) 14%, transparent); }
+.topic-opt-count { margin-left: auto; font-size: 12px; color: color-mix(in srgb, var(--color-text) 40%, transparent); }
+.topic-opt-new { color: var(--color-accent); }
+.topic-opt-new .ph { font-size: 14px; }
+
+/* ── topic detail ──────────────────────────────────────────────────── */
+.topic-title { margin-bottom: 2px; }
+.topic-url { margin: 0; font-size: 13px; }
+.topic-url a { color: color-mix(in srgb, var(--color-text) 50%, transparent); }
+.topic-url a:hover { color: var(--color-accent); }
+.topic-actions {
   display: flex; flex-wrap: wrap; gap: var(--space-2);
   margin-top: var(--space-4); margin-bottom: var(--space-6);
 }
@@ -240,9 +258,12 @@ button.seg-opt { background: none; border: 0; color: inherit; font: inherit; }
     transparent, var(--color-divider) 48px,
     var(--color-divider) calc(100% - 48px), transparent);
 }
-.session-source { margin-top: var(--space-4); font-size: 13px; color: color-mix(in srgb, var(--color-text) 50%, transparent); }
+.session-meta { margin-top: var(--space-4); display: flex; flex-direction: column; gap: 2px; }
+.session-source { font-size: 13px; color: color-mix(in srgb, var(--color-text) 50%, transparent); }
 .session-source a { color: inherit; text-underline-offset: 3px; }
 .session-source a:hover { color: var(--color-accent); }
+.session-source code { font-size: 12px; }
+.session-topic { font-size: 12px; letter-spacing: 0.02em; color: color-mix(in srgb, var(--color-text) 35%, transparent); }
 .session-question .cloze, .session-answer .cloze-revealed { color: var(--color-accent-400); }
 .session-actions { margin-top: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
 .grade-bar { display: flex; gap: var(--space-2); }

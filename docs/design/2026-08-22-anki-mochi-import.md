@@ -2,6 +2,8 @@
 
 Additive import path for migrating flashcards from Anki and Mochi. Separate from the desired-state `/import` refactor loop.
 
+> **2026-09-01:** "source" (the grouping) was renamed to **topic** — see `2026-09-01-topics-and-sources.md`. Decks now map to topics; the API param is `?topic=`. Terminology below has been updated in place.
+
 ## Supported formats
 
 | Format | How to export |
@@ -16,23 +18,23 @@ Rejected with guidance:
 
 ## Semantics
 
-- **Additive only** — creates sources and prompts; never edits or retires existing prompts
-- **Dedup** — skip if the target source already has a prompt with identical `(kind, question, answer)` (including retired)
+- **Additive only** — creates topics and prompts; never edits or retires existing prompts
+- **Dedup** — skip if the target topic already has a prompt with identical `(kind, question, answer)` (including retired)
 - **Fresh FSRS state** — all imported cards start as new (due now, empty event log)
 - **Dry-run by default** — `POST /import/foreign?apply=0` previews counts; `apply=1` writes
 
 ## Mapping rules
 
-**Anki headered export** (Notes in plain text): deck column → source name; notetype drives shape:
+**Anki headered export** (Notes in plain text): deck column → topic name; notetype drives shape:
 
 - `Basic` → one Q/A prompt
 - `Basic (and reversed card)` → two Q/A prompts (both directions)
 - `Cloze` → cloze prompt (`{{cN::text}}` → `{{text}}`)
 - Unknown notetype → first two fields as Q/A with a warning
 
-**Anki headerless export** (Cards in plain text): every row is one Q/A; source name from UI param (default `Anki import`).
+**Anki headerless export** (Cards in plain text): every row is one Q/A; topic name from UI param (default `Anki import`).
 
-**Mochi**: deck name → source; card `content` or template-resolved content split on first `---` line into question/answer. Trashed and empty cards skipped with warnings.
+**Mochi**: deck name → topic; card `content` or template-resolved content split on first `---` line into question/answer. Trashed and empty cards skipped with warnings.
 
 When `#html:true`, fields are converted to markdown (entities, `<b>`, `<br>`, etc.). Content is sanitized so lines cannot collide with the interchange format markers.
 
@@ -42,12 +44,12 @@ Referenced `![alt](@media/file)` links in Mochi content are uploaded to R2 (cont
 
 ## UI
 
-Settings → **Import** → **Migrate in** mode (not **Restore / refactor**, which is only for `export.zip` from this worker). File upload, optional source name for headerless Anki export (shown only in this mode), dry-run + apply.
+Settings → **Import** → **Migrate in** mode (not **Restore / refactor**, which is only for `export.zip` from this worker). File upload, optional topic name for headerless Anki export (shown only in this mode), dry-run + apply.
 
 ## API
 
-`POST /import/foreign?apply=0|1&source=<name>`
+`POST /import/foreign?apply=0|1&topic=<name>`
 
 Body: raw TSV text or Mochi zip bytes.
 
-Response: `{ preview: { created, skipped, sources, warnings } }` or `{ applied: … }`.
+Response: `{ preview: { created, skipped, topics, warnings } }` or `{ applied: … }`.

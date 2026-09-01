@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { renderMarkdown, renderPromptAnswer, renderPromptQuestion } from "../src/markdown";
+import { renderMarkdown, renderPromptAnswer, renderPromptQuestion, renderSourceLine } from "../src/markdown";
+
+describe("renderSourceLine", () => {
+  it("renders inline markdown without a paragraph wrapper", () => {
+    const html = renderSourceLine("[Why We Think](https://ex.com/t) — *ch. 3*");
+    expect(html).not.toContain("<p>");
+    expect(html).toContain('<a href="https://ex.com/t" rel="noopener">Why We Think</a>');
+    expect(html).toContain("<em>ch. 3</em>");
+  });
+
+  it("applies the same safety rules as block rendering", () => {
+    expect(renderSourceLine("<script>alert(1)</script>")).not.toContain("<script>");
+    const link = renderSourceLine("[x](javascript:alert(1))");
+    expect(link).not.toContain("javascript:");
+    expect(link).not.toContain("<a ");
+  });
+});
 
 describe("renderMarkdown", () => {
   it("renders code blocks and inline code", () => {

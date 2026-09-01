@@ -9,15 +9,15 @@ export async function reviewPage(request: Request, env: Env): Promise<Response> 
   const settings = await getSettings(env.DB);
   const now = new Date();
   const shell = await shellFor(env.DB, "review", now);
-  const sourceId = url.searchParams.get("source");
+  const topicId = url.searchParams.get("topic");
   const session = await buildSession(env.DB, {
     ahead: url.searchParams.get("ahead") === "1",
-    sourceId,
+    topicId,
     cap: settings.session_cap,
     tz: settings.timezone
   }, now);
 
-  const sessionPayload = { ...session, sourceId };
+  const sessionPayload = { ...session, topicId };
   const body = `<div id="review"></div>
 <script type="application/json" id="session">${jsonForScript(sessionPayload)}</script>`;
 

@@ -61,13 +61,17 @@
     return new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.85));
   }
 
+  const picker = window.topicPicker(document.getElementById("topic-picker"));
+
   form.onsubmit = async (e) => {
     e.preventDefault();
     const text = document.getElementById("text").value;
     if (!text.trim()) { flash.textContent = "Nothing to save."; return; }
     const item = { text };
-    const src = document.getElementById("source").value.trim();
-    if (src) item.title = src;
+    // Only the name travels with the capture — the topic row is created (or
+    // matched) later at refine, so offline captures stay plain queued JSON.
+    const topic = picker.get().name;
+    if (topic) item.topic = topic;
     const file = document.getElementById("photo").files[0];
     let photoFailed = false;
     if (file) {
@@ -87,15 +91,6 @@
       flash.textContent = "Offline — queued, will sync.";
     }
     form.reset();
-  };
-
-  document.getElementById("source").oninput = async (e) => {
-    try {
-      const res = await fetch(`/api/sources?q=${encodeURIComponent(e.target.value)}`);
-      const { items } = await res.json();
-      document.getElementById("source-list").innerHTML =
-        items.map((s) => `<option value="${esc(s.name)}">`).join("");
-    } catch { /* offline */ }
   };
 
   window.addEventListener("online", flushQueue);

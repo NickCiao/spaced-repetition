@@ -14,9 +14,10 @@ export async function capturePage(env: Env): Promise<Response> {
   </div>
   <div class="attach-row">
     <div class="field">
-      <label for="source">Source (optional)</label>
-      <input class="input" type="text" id="source" list="source-list" placeholder="Book, article, podcast…" autocomplete="off">
-      <datalist id="source-list"></datalist>
+      <label for="topic">Topic (optional)</label>
+      <div class="topic-picker" id="topic-picker">
+        <input class="input" type="text" id="topic" placeholder="New or existing topic" autocomplete="off">
+      </div>
     </div>
     <label class="btn btn-secondary"><i class="ph ph-camera"></i> Photo<input type="file" id="photo" accept="image/*" hidden></label>
   </div>
@@ -28,20 +29,21 @@ export async function capturePage(env: Env): Promise<Response> {
 <h6 class="kicker">Today <span class="count" id="today-count"></span></h6>
 <div class="rows" id="today"></div>`;
   return page("Capture", body, {
-    script: "/static/capture.js",
+    script: ["/static/topic-picker.js", "/static/capture.js"],
     shell
   });
 }
 
 export async function captureApi(request: Request, env: Env): Promise<Response> {
-  const b = await request.json<{ text?: string; url?: string; title?: string; note?: string; image_id?: string }>()
+  const b = await request.json<{ text?: string; url?: string; title?: string; note?: string; image_id?: string; topic?: string }>()
     .catch(() => null);
   const text = (b?.text ?? "").trim();
   if (!text) return Response.json({ error: "text required" }, { status: 400 });
   const id = newId();
   await env.DB.prepare(
-    "INSERT INTO captures (id, created_at, text, url, title, note, image_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
-  ).bind(id, nowIso(), text, b?.url ?? null, b?.title ?? null, b?.note ?? null, b?.image_id ?? null).run();
+    "INSERT INTO captures (id, created_at, text, url, title, note, image_id, topic) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+  ).bind(id, nowIso(), text, b?.url ?? null, b?.title ?? null, b?.note ?? null, b?.image_id ?? null,
+         b?.topic?.trim() || null).run();
   return Response.json({ ok: true, id, ...(await navCounts(env.DB)) });
 }
 
@@ -60,10 +62,17 @@ export async function capturesToday(env: Env): Promise<Response> {
   return Response.json({ items });
 }
 
-export async function sourcesApi(request: Request, env: Env): Promise<Response> {
-  const q = new URL(request.url).searchParams.get("q") ?? "";
-  const rows = await env.DB.prepare(
-    "SELECT id, name FROM sources WHERE name LIKE ? ORDER BY created_at DESC LIMIT 10"
-  ).bind(`%${q}%`).all();
-  return Response.json({ items: rows.results });
+/**
+ * Every topic, most recently used first (last prompt touched, falling back to
+ * the topic's own creation). The picker filters client-side — at single-user
+ * scale the whole list is cheaper than a query per keystroke.
+ */
+export async function topicsApi(env: Env): Promise<Response> {
+  const rows = await env.DB.prepare(`
+    SELECT t.id, t.name, COUNT(p.id) AS count,
+           COALESCE(MAX(p.updated_at), t.created_at) AS last_used
+    FROM topics t LEFT JOIN prompts p ON p.topic_id = t.id
+    GROUP BY t.id ORDER BY last_used DESC`
+  ).all<{ id: string; name: string; count: number }>();
+  return Response.json({ items: rows.results.map(r => ({ id: r.id, name: r.name, count: r.count })) });
 }

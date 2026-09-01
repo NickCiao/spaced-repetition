@@ -103,6 +103,7 @@ curl -s -X POST "https://<your-worker>/api/capture" \
      - `note` → **Provided Input** from step 1
      - `url` → **Item** from step 5
      - `title` → **Name** from step 6
+     - `topic` → optional; a topic name to file the capture under (refine pre-selects it)
 8. (Optional) **Show Result** — confirms `{"ok":true,...}` on success.
 
 
@@ -110,14 +111,16 @@ curl -s -X POST "https://<your-worker>/api/capture" \
 
 ```bash
 curl -H "Authorization: Bearer $SR_TOKEN" -o export.zip https://<your-worker>/export.zip
-# unzip, edit prompts/*.md (keep the <!-- id --> comments; delete one to mint a new card), re-zip
+# unzip, edit prompts/*.md (one file per topic; keep the <!-- id --> comments; delete one to mint a new card), re-zip
 curl -H "Authorization: Bearer $SR_TOKEN" --data-binary @export.zip "https://<your-worker>/import?apply=0"   # dry-run diff
 curl -H "Authorization: Bearer $SR_TOKEN" --data-binary @export.zip "https://<your-worker>/import?apply=1"   # apply
 ```
 
+Each prompt block may carry an optional `S:` line — its source attribution, one line of markdown (e.g. `S: [Raft paper](https://raft.github.io/raft.pdf)`) — after the answer, before the id comment. Zips exported before the topic rename (frontmatter `source:` instead of `topic:`) still restore.
+
 Restore onto a blank deploy: `.../import?apply=1&restore=1`.
 
-The export zip includes `retired.jsonl` (retired prompts' content archive). To un-retire a prompt, re-add its block with its `<!-- id -->` comment into its source file during import. **Delete** (review overflow or edit page) removes a prompt and its review history permanently — it will not appear in export and cannot be undone through the app (only an older backup zip could bring it back).
+The export zip includes `retired.jsonl` (retired prompts' content archive). To un-retire a prompt, re-add its block with its `<!-- id -->` comment into its topic file during import. **Delete** (review overflow or edit page) removes a prompt and its review history permanently — it will not appear in export and cannot be undone through the app (only an older backup zip could bring it back).
 
 ## Backup
 

@@ -1,9 +1,9 @@
 import type { Env } from "../env.d";
-import { getSettings, insertPromptStmt, insertSource, newId, nowIso, type CaptureRow, type PromptRow, type SourceRow } from "../db";
-import { normalizePromptInput, validatePromptInput } from "../format";
+import { getSettings, insertPromptStmt, insertTopic, newId, nowIso, type CaptureRow, type PromptRow, type TopicRow } from "../db";
+import { normalizePromptInput, normalizeSourceInput, validatePromptInput, validateSourceInput } from "../format";
 import { newCardFields } from "../scheduler";
 import { renderPromptAnswer, renderPromptQuestion } from "../markdown";
-import { captureCardMeta, captureRowMeta, escapeHtml, page, shellFor } from "../html";
+import { captureCardMeta, captureRowMeta, escapeHtml, hostOnly, page, shellFor } from "../html";
 
 export async function inboxPage(env: Env): Promise<Response> {
   const settings = await getSettings(env.DB);
@@ -51,7 +51,12 @@ export async function refinePage(captureId: string, env: Env): Promise<Response>
   const cap = await env.DB.prepare("SELECT * FROM captures WHERE id = ? AND status = 'pending'")
     .bind(captureId).first<CaptureRow>();
   if (!cap) return new Response("not found", { status: 404 });
-  const sourceGuess = cap.title ?? "";
+  // Pre-rename captures stored the typed grouping text in `title` — treat it as
+  // the topic guess when no explicit topic was captured.
+  const topicGuess = cap.topic ?? cap.title ?? "";
+  const sourceGuess = cap.url && /^https?:\/\//i.test(cap.url)
+    ? `[${cap.title || hostOnly(cap.url)}](${cap.url})`
+    : "";
   const metaParts = captureCardMeta(cap, settings.timezone);
 
   const body = `
@@ -65,31 +70,39 @@ export async function refinePage(captureId: string, env: Env): Promise<Response>
 </div>
 <div id="refine"
   data-capture="${cap.id}"
-  data-source-name="${escapeHtml(sourceGuess)}"
-  data-source-url="${escapeHtml(cap.url ?? "")}"></div>`;
-  return page("Refine", body, { script: "/static/refine.js", shell });
+  data-topic-name="${escapeHtml(topicGuess)}"
+  data-source="${escapeHtml(sourceGuess)}"></div>`;
+  return page("Refine", body, { script: ["/static/topic-picker.js", "/static/refine.js"], shell });
 }
 
 type RefineBody = {
   capture_id?: string;
-  source?: { id?: string; name?: string; url?: string };
+  topic?: { id?: string; name?: string };
+  source?: string;
   prompts?: { kind: "qa" | "cloze"; question: string; answer: string }[];
 };
 
 export async function refineApi(request: Request, env: Env): Promise<Response> {
   const b = await request.json<RefineBody>().catch(() => null);
-  if (!b?.capture_id || !b.source || !b.prompts?.length) {
-    return Response.json({ error: "capture_id, source, prompts required" }, { status: 400 });
+  if (!b?.capture_id || !b.topic || !b.prompts?.length) {
+    return Response.json({ error: "capture_id, topic, prompts required" }, { status: 400 });
   }
   for (const p of b.prompts) {
     const invalid = validatePromptInput(p);
     if (invalid) return Response.json({ error: invalid }, { status: 400 });
   }
-  if (!b.source.id && !b.source.name?.trim()) {
-    return Response.json({ error: "source name required" }, { status: 400 });
+  if (!b.topic.id && !b.topic.name?.trim()) {
+    return Response.json({ error: "topic name required" }, { status: 400 });
   }
+  const badSource = validateSourceInput(b.source);
+  if (badSource) return Response.json({ error: badSource }, { status: 400 });
+  const source = normalizeSourceInput(b.source);
   const cap = await env.DB.prepare("SELECT * FROM captures WHERE id = ?").bind(b.capture_id).first<CaptureRow>();
   if (!cap) return Response.json({ error: "unknown capture" }, { status: 404 });
+  if (b.topic.id) {
+    const t = await env.DB.prepare("SELECT id FROM topics WHERE id = ?").bind(b.topic.id).first<TopicRow>();
+    if (!t) return Response.json({ error: "unknown topic" }, { status: 404 });
+  }
 
   // Atomic claim: exactly one concurrent refine can consume a capture.
   const claim = await env.DB.prepare(
@@ -99,19 +112,19 @@ export async function refineApi(request: Request, env: Env): Promise<Response> {
 
   try {
     const ts = nowIso();
-    let sourceId = b.source.id ?? null;
-    if (!sourceId) {
-      // Case-insensitive dedupe, matching /api/source: refining into "gwern"
+    let topicId = b.topic.id ?? null;
+    if (!topicId) {
+      // Case-insensitive dedupe, matching /api/topic: refining into "gwern"
       // must reuse "Gwern" rather than create a near-duplicate.
-      const existing = await env.DB.prepare("SELECT id FROM sources WHERE name = ? COLLATE NOCASE")
-        .bind(b.source.name!.trim()).first<SourceRow>();
-      sourceId = existing
+      const existing = await env.DB.prepare("SELECT id FROM topics WHERE name = ? COLLATE NOCASE")
+        .bind(b.topic.name!.trim()).first<TopicRow>();
+      topicId = existing
         ? existing.id
-        : await insertSource(env.DB, { name: b.source.name!.trim(), url: b.source.url || null, created_at: ts });
+        : await insertTopic(env.DB, { name: b.topic.name!.trim(), url: null, created_at: ts });
     }
 
-    const posRow = await env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS p FROM prompts WHERE source_id = ?")
-      .bind(sourceId).first<{ p: number }>();
+    const posRow = await env.DB.prepare("SELECT COALESCE(MAX(position), -1) AS p FROM prompts WHERE topic_id = ?")
+      .bind(topicId).first<{ p: number }>();
     let pos = (posRow?.p ?? -1) + 1;
 
     const ids: string[] = [];
@@ -120,7 +133,8 @@ export async function refineApi(request: Request, env: Env): Promise<Response> {
       ids.push(id);
       const { question, answer } = normalizePromptInput(p);
       return insertPromptStmt(env.DB, {
-        id, source_id: sourceId!, kind: p.kind, question, answer,
+        id, topic_id: topicId!, kind: p.kind, question, answer,
+        source, // one capture, one provenance — shared by every prompt written from it
         position: pos++, created_at: ts, updated_at: ts
       }, newCardFields(new Date()));
     });

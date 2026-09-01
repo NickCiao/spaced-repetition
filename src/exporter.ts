@@ -1,30 +1,31 @@
 import { zipSync, strToU8 } from "fflate";
 import type { Env } from "./env.d";
-import type { CaptureRow, EventRow, PromptRow, SourceRow } from "./db";
-import { renderSourceFile, sourceFileName } from "./format";
+import type { CaptureRow, EventRow, PromptRow, TopicRow } from "./db";
+import { renderTopicFile, topicFileName } from "./format";
 import { exportableSettings, getSettings } from "./db";
 
 export async function buildExportZip(env: Env): Promise<Uint8Array> {
   const files: Record<string, Uint8Array> = {};
 
-  const sources = (await env.DB.prepare("SELECT * FROM sources ORDER BY created_at").all<SourceRow>()).results;
-  for (const s of sources) {
+  const topics = (await env.DB.prepare("SELECT * FROM topics ORDER BY created_at").all<TopicRow>()).results;
+  for (const t of topics) {
     const prompts = (await env.DB.prepare(
-      "SELECT * FROM prompts WHERE source_id = ? AND retired = 0 ORDER BY position"
-    ).bind(s.id).all<PromptRow>()).results;
-    files[sourceFileName(s.name, s.id)] = strToU8(renderSourceFile(s, prompts));
+      "SELECT * FROM prompts WHERE topic_id = ? AND retired = 0 ORDER BY position"
+    ).bind(t.id).all<PromptRow>()).results;
+    files[topicFileName(t.name, t.id)] = strToU8(renderTopicFile(t, prompts));
   }
 
   // Retired prompts stay out of the authoring files (those must reflect the active,
   // editable set) but must not be lost from the export — archive them separately so
   // restore can rebuild the complete system state, not just what's currently active.
   const retired = (await env.DB.prepare(
-    `SELECT p.id, p.kind, p.question, p.answer, p.position, s.name AS source_name
-     FROM prompts p JOIN sources s ON s.id = p.source_id
-     WHERE p.retired = 1 ORDER BY p.source_id, p.position`
-  ).all<{ id: string; kind: "qa" | "cloze"; question: string; answer: string; position: number; source_name: string }>()).results;
+    `SELECT p.id, p.kind, p.question, p.answer, p.source, p.position, t.name AS topic_name
+     FROM prompts p JOIN topics t ON t.id = p.topic_id
+     WHERE p.retired = 1 ORDER BY p.topic_id, p.position`
+  ).all<{ id: string; kind: "qa" | "cloze"; question: string; answer: string; source: string | null; position: number; topic_name: string }>()).results;
   files["retired.jsonl"] = strToU8(retired.map(p => JSON.stringify({
-    id: p.id, source_name: p.source_name, kind: p.kind, question: p.question, answer: p.answer, position: p.position
+    id: p.id, topic_name: p.topic_name, kind: p.kind, question: p.question, answer: p.answer,
+    ...(p.source ? { source: p.source } : {}), position: p.position
   })).join("\n") + (retired.length ? "\n" : ""));
 
   const events = (await env.DB.prepare("SELECT * FROM events ORDER BY id").all<EventRow>()).results;
@@ -38,6 +39,7 @@ export async function buildExportZip(env: Env): Promise<Uint8Array> {
     let front = `---\ncaptured: ${c.created_at}\n`;
     if (c.url) front += `url: ${c.url}\n`;
     if (c.title) front += `title: ${c.title}\n`;
+    if (c.topic) front += `topic: ${c.topic}\n`;
     // Frontmatter is one value per line; a multi-line note is flattened to a single
     // line here (annotation, bounded loss — the note is a hint, not authored content).
     if (c.note) front += `note: ${c.note.replace(/\s*[\r\n]+\s*/g, " ")}\n`;

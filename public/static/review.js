@@ -30,7 +30,7 @@
   function sessionHref(params = {}) {
     const q = new URLSearchParams();
     if (session.ahead) q.set("ahead", "1");
-    if (session.sourceId) q.set("source", session.sourceId);
+    if (session.topicId) q.set("topic", session.topicId);
     for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
     const s = q.toString();
     return s ? `/?${s}` : "/";
@@ -140,11 +140,11 @@
     }).join("");
   }
 
-  function sourceLine(c) {
-    const src = c.sourceUrl && /^https?:\/\//i.test(c.sourceUrl)
-      ? `<a href="${esc(c.sourceUrl)}" target="_blank" rel="noopener">${esc(c.sourceName)}</a>`
-      : esc(c.sourceName);
-    return c.sourceName ? `<div class="session-source">from ${src}</div>` : "";
+  function attribution(c) {
+    // sourceHtml is rendered server-side through the sanitizing markdown pipeline.
+    const src = c.sourceHtml ? `<div class="session-source">from ${c.sourceHtml}</div>` : "";
+    const topic = c.topicName ? `<div class="session-topic">${esc(c.topicName)}</div>` : "";
+    return src || topic ? `<div class="session-meta">${src}${topic}</div>` : "";
   }
 
   function render() {
@@ -152,10 +152,10 @@
     const cardBody = !revealed
       ? `<div class="session-question">${c.questionHtml}</div>`
       : c.kind === "cloze"
-        ? `<div class="session-answer">${c.answerHtml}</div>${sourceLine(c)}`
+        ? `<div class="session-answer">${c.answerHtml}</div>${attribution(c)}`
         : `<div class="session-question dimmed">${c.questionHtml}</div>
            <div class="session-divider"></div>
-           <div class="session-answer">${c.answerHtml}</div>${sourceLine(c)}`;
+           <div class="session-answer">${c.answerHtml}</div>${attribution(c)}`;
 
     const flagPanel = flagging ? `
       <div class="flag-panel card elev-md">

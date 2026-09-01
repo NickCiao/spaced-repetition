@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { getSetting, getSettings, insertPromptStmt, insertSource, newId, rememberBaseUrl, setSetting } from "../src/db";
+import { getSetting, getSettings, insertPromptStmt, insertTopic, newId, rememberBaseUrl, setSetting } from "../src/db";
 import { newCardFields } from "../src/scheduler";
 
 describe("db", () => {
@@ -40,19 +40,27 @@ describe("db", () => {
   });
 
   it("insert helpers agree with the schema (guards column-list drift)", async () => {
-    // insertPromptStmt/insertSource are the only production code that writes these
+    // insertPromptStmt/insertTopic are the only production code that writes these
     // column lists — a schema migration that forgets them must fail here.
     const now = new Date().toISOString();
-    const sid = await insertSource(env.DB, { name: "Test Source", url: null, created_at: now });
+    const tid = await insertTopic(env.DB, { name: "Test Topic", url: null, created_at: now });
     await insertPromptStmt(env.DB, {
-      id: "pmt0000001", source_id: sid, kind: "qa", question: "Q?", answer: "A.",
-      position: 0, created_at: now, updated_at: now
+      id: "pmt0000001", topic_id: tid, kind: "qa", question: "Q?", answer: "A.",
+      source: "[Doc](https://ex.com/d)", position: 0, created_at: now, updated_at: now
     }, newCardFields(new Date())).run();
     const row = await env.DB.prepare(`SELECT * FROM prompts WHERE id = ?`).bind("pmt0000001").first();
     expect(row?.kind).toBe("qa");
     expect(row?.retired).toBe(0);
-    expect(row?.source_id).toBe(sid);
-    const src = await env.DB.prepare(`SELECT * FROM sources WHERE id = ?`).bind(sid).first();
-    expect(src?.meta).toBe("{}");
+    expect(row?.topic_id).toBe(tid);
+    expect(row?.source).toBe("[Doc](https://ex.com/d)");
+    const topic = await env.DB.prepare(`SELECT * FROM topics WHERE id = ?`).bind(tid).first();
+    expect(topic?.meta).toBe("{}");
+
+    await insertPromptStmt(env.DB, {
+      id: "pmt0000002", topic_id: tid, kind: "qa", question: "Q2?", answer: "A2.",
+      position: 1, created_at: now, updated_at: now
+    }, newCardFields(new Date())).run();
+    const bare = await env.DB.prepare(`SELECT source FROM prompts WHERE id = ?`).bind("pmt0000002").first();
+    expect(bare?.source).toBeNull(); // source is optional and defaults to null
   });
 });

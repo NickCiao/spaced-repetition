@@ -1,7 +1,7 @@
 import { strFromU8 } from "fflate";
 import type { Env } from "./env.d";
-import { insertPromptStmt, insertSource, newId, setSetting, type PromptRow, type SourceRow } from "./db";
-import { FormatError, parseSourceFile, type ParsedFile, type ParsedPrompt } from "./format";
+import { insertPromptStmt, insertTopic, newId, setSetting, type PromptRow, type TopicRow } from "./db";
+import { FormatError, parseTopicFile, type ParsedFile, type ParsedPrompt } from "./format";
 import {
   type ForeignImport, type ForeignPrompt, rewriteMediaRefs
 } from "./interop";
@@ -14,7 +14,7 @@ export type Diff = {
   newPrompts: { file: string; question: string }[];
   edited: string[];
   retired: string[];
-  newSources: string[];
+  newTopics: string[];
   errors: string[];
 };
 
@@ -27,7 +27,7 @@ function parseAll(files: Record<string, Uint8Array>): { parsed: Parsed; errors: 
   for (const [path, bytes] of Object.entries(files)) {
     if (!path.startsWith("prompts/") || !path.endsWith(".md")) continue;
     try {
-      const file = parseSourceFile(strFromU8(bytes), path);
+      const file = parseTopicFile(strFromU8(bytes), path);
       for (const p of file.prompts) {
         if (p.id) {
           if (seenIds.has(p.id)) errors.push(`${path}: duplicate id ${p.id} across files`);
@@ -48,18 +48,18 @@ export async function computeImportDiff(env: Env, files: Record<string, Uint8Arr
 }
 
 async function diffAgainstDb(env: Env, parsed: Parsed, errors: string[]): Promise<Diff> {
-  const diff: Diff = { newPrompts: [], edited: [], retired: [], newSources: [], errors };
+  const diff: Diff = { newPrompts: [], edited: [], retired: [], newTopics: [], errors };
 
   // Load every prompt, retired included: a retired id showing back up in an upload
   // is an un-retire, not an "unknown id" — only an id matching no row at all is an error.
   const existing = (await env.DB.prepare("SELECT * FROM prompts").all<PromptRow>()).results;
   const byId = new Map(existing.map(p => [p.id, p]));
-  const sources = (await env.DB.prepare("SELECT * FROM sources").all<SourceRow>()).results;
-  const sourceByName = new Map(sources.map(s => [s.name, s]));
+  const topics = (await env.DB.prepare("SELECT * FROM topics").all<TopicRow>()).results;
+  const topicByName = new Map(topics.map(t => [t.name, t]));
   const seen = new Set<string>();
 
   for (const { path, file } of parsed) {
-    if (!sourceByName.has(file.name)) diff.newSources.push(file.name);
+    if (!topicByName.has(file.name)) diff.newTopics.push(file.name);
     for (const p of file.prompts) {
       if (!p.id) { diff.newPrompts.push({ file: path, question: p.question.slice(0, 60) }); continue; }
       const cur = byId.get(p.id);
@@ -69,8 +69,9 @@ async function diffAgainstDb(env: Env, parsed: Parsed, errors: string[]): Promis
         diff.edited.push(p.id); // re-appearing in the upload un-retires it, regardless of content match
         continue;
       }
-      const curSourceName = sources.find(s => s.id === cur.source_id)?.name;
-      if (cur.kind !== p.kind || cur.question !== p.question || cur.answer !== p.answer || curSourceName !== file.name) {
+      const curTopicName = topics.find(t => t.id === cur.topic_id)?.name;
+      if (cur.kind !== p.kind || cur.question !== p.question || cur.answer !== p.answer
+        || cur.source !== p.source || curTopicName !== file.name) {
         diff.edited.push(p.id);
       }
     }
@@ -92,16 +93,16 @@ export async function applyImport(
   let created = 0, edited = 0;
 
   for (const { file } of parsed) {
-    const existing = await env.DB.prepare("SELECT * FROM sources WHERE name = ?").bind(file.name).first<SourceRow>();
-    let sourceId: string;
+    const existing = await env.DB.prepare("SELECT * FROM topics WHERE name = ?").bind(file.name).first<TopicRow>();
+    let topicId: string;
     if (!existing) {
-      sourceId = await insertSource(env.DB, {
+      topicId = await insertTopic(env.DB, {
         name: file.name, url: file.url, meta: JSON.stringify(file.meta), created_at: ts
       });
     } else {
-      sourceId = existing.id;
-      await env.DB.prepare("UPDATE sources SET url = ?, meta = ? WHERE id = ?")
-        .bind(file.url, JSON.stringify(file.meta), sourceId).run();
+      topicId = existing.id;
+      await env.DB.prepare("UPDATE topics SET url = ?, meta = ? WHERE id = ?")
+        .bind(file.url, JSON.stringify(file.meta), topicId).run();
     }
     let pos = 0;
     for (const p of file.prompts) {
@@ -109,13 +110,13 @@ export async function applyImport(
         // retired=0 unconditionally: a prompt present in the upload is active by definition,
         // whether it was already active (no-op) or retired (this is what un-retires it).
         await env.DB.prepare(
-          "UPDATE prompts SET source_id=?, kind=?, question=?, answer=?, position=?, retired=0, updated_at=? WHERE id=?"
-        ).bind(sourceId, p.kind, p.question, p.answer, pos++, ts, p.id).run();
+          "UPDATE prompts SET topic_id=?, kind=?, question=?, answer=?, source=?, position=?, retired=0, updated_at=? WHERE id=?"
+        ).bind(topicId, p.kind, p.question, p.answer, p.source, pos++, ts, p.id).run();
         if (editedIds.has(p.id)) edited++;
       } else {
         await insertPromptStmt(env.DB, {
-          id: newId(), source_id: sourceId, kind: p.kind, question: p.question, answer: p.answer,
-          position: pos++, created_at: ts, updated_at: ts
+          id: newId(), topic_id: topicId, kind: p.kind, question: p.question, answer: p.answer,
+          source: p.source, position: pos++, created_at: ts, updated_at: ts
         }, newCardFields(now)).run();
         created++;
       }
@@ -129,19 +130,20 @@ export async function applyImport(
 
 type LogLine = { ts: string; prompt_id: string; action: string; elapsed_days: number | null; state_after: unknown };
 type ArchiveLine = {
-  id: string; source_name: string; kind: "qa" | "cloze"; question: string; answer: string; position: number;
+  id: string; topic_name?: string; source_name?: string; kind: "qa" | "cloze";
+  question: string; answer: string; source?: string; position: number;
 };
 
 // Best-effort: a failed restore must not leave a half-populated DB that then blocks a
 // retry on the empty-prompts-table gate below. Order matches the FK-ish dependency
-// (prompts reference sources); each delete is independent so one failing doesn't stop
+// (prompts reference topics); each delete is independent so one failing doesn't stop
 // the rest.
 // D1 rows only — R2 objects a failed restore already `put` are deliberately left alone:
 // they're content-addressed, so a later re-put is just an idempotent overwrite, and with
 // no `assets` row pointing at them they're simply unreferenced; the D1 tables are the
 // consistency boundary, not the bucket.
 async function wipeAll(env: Env): Promise<void> {
-  for (const table of ["events", "prompts", "sources", "captures", "assets"]) {
+  for (const table of ["events", "prompts", "topics", "captures", "assets"]) {
     try { await env.DB.prepare(`DELETE FROM ${table}`).run(); } catch { /* best-effort */ }
   }
 }
@@ -150,7 +152,7 @@ async function wipeAll(env: Env): Promise<void> {
 export type ForeignImportResult = {
   created: number;
   skipped: number;
-  sources: { name: string; created: number; skipped: number }[];
+  topics: { name: string; created: number; skipped: number }[];
   warnings: string[];
 };
 
@@ -180,23 +182,23 @@ export async function applyForeignImport(
   }
 
   let created = 0, skipped = 0;
-  const sources: ForeignImportResult["sources"] = [];
+  const topics: ForeignImportResult["topics"] = [];
 
   for (const deck of data.decks) {
     let deckCreated = 0, deckSkipped = 0;
-    let source = await env.DB.prepare("SELECT * FROM sources WHERE name = ?").bind(deck.name).first<SourceRow>();
+    let topic = await env.DB.prepare("SELECT * FROM topics WHERE name = ?").bind(deck.name).first<TopicRow>();
 
     const existingKeys = new Set<string>();
-    if (source) {
+    if (topic) {
       const rows = (await env.DB.prepare(
-        "SELECT kind, question, answer FROM prompts WHERE source_id = ?"
-      ).bind(source.id).all<{ kind: string; question: string; answer: string }>()).results;
+        "SELECT kind, question, answer FROM prompts WHERE topic_id = ?"
+      ).bind(topic.id).all<{ kind: string; question: string; answer: string }>()).results;
       for (const r of rows) existingKeys.add(`${r.kind}\0${r.question}\0${r.answer}`);
     }
 
-    let pos = source
-      ? (await env.DB.prepare("SELECT MAX(position) AS m FROM prompts WHERE source_id = ?")
-        .bind(source.id).first<{ m: number }>())?.m ?? -1
+    let pos = topic
+      ? (await env.DB.prepare("SELECT MAX(position) AS m FROM prompts WHERE topic_id = ?")
+        .bind(topic.id).first<{ m: number }>())?.m ?? -1
       : -1;
 
     for (const p of deck.prompts) {
@@ -217,13 +219,13 @@ export async function applyForeignImport(
         continue;
       }
 
-      if (!source) {
-        const sid = await insertSource(env.DB, { name: deck.name, url: null, created_at: ts });
-        source = { id: sid, name: deck.name, url: null, meta: "{}", created_at: ts };
+      if (!topic) {
+        const tid = await insertTopic(env.DB, { name: deck.name, url: null, created_at: ts });
+        topic = { id: tid, name: deck.name, url: null, meta: "{}", created_at: ts };
       }
 
       await insertPromptStmt(env.DB, {
-        id: newId(), source_id: source.id, kind: prompt.kind, question: prompt.question, answer: prompt.answer,
+        id: newId(), topic_id: topic.id, kind: prompt.kind, question: prompt.question, answer: prompt.answer,
         position: ++pos, created_at: ts, updated_at: ts
       }, newCardFields(now)).run();
       existingKeys.add(key);
@@ -231,15 +233,15 @@ export async function applyForeignImport(
       deckCreated++;
     }
 
-    if (deckCreated || deckSkipped) sources.push({ name: deck.name, created: deckCreated, skipped: deckSkipped });
+    if (deckCreated || deckSkipped) topics.push({ name: deck.name, created: deckCreated, skipped: deckSkipped });
   }
 
-  return { created, skipped, sources, warnings };
+  return { created, skipped, topics, warnings };
 }
 
 export async function restoreFromZip(
   env: Env, files: Record<string, Uint8Array>, now: Date
-): Promise<{ sources: number; prompts: number; events: number }> {
+): Promise<{ topics: number; prompts: number; events: number }> {
   // This check — and only this check — must stay outside the try/wipe below: a 409
   // here means "there's real data already, leave it alone," not "restore failed."
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM prompts").first<{ n: number }>();
@@ -271,8 +273,8 @@ export async function restoreFromZip(
     // "ever had a retire event" is not the same as "is retired now").
     let nPrompts = 0;
     async function insertRestoredPrompt(
-      id: string, sourceId: string, kind: "qa" | "cloze", question: string, answer: string,
-      position: number, retired: number
+      id: string, topicId: string, kind: "qa" | "cloze", question: string, answer: string,
+      source: string | null, position: number, retired: number
     ): Promise<void> {
       const evs = (eventsByPrompt.get(id) ?? []).sort((a, b) => a.ts.localeCompare(b.ts));
       const birth = evs.length ? new Date(evs[0].ts) : now;
@@ -281,42 +283,45 @@ export async function restoreFromZip(
         if (e.action === "remembered" || e.action === "forgot") f = applyGrade(f, e.action, new Date(e.ts), retention);
       }
       await insertPromptStmt(env.DB, {
-        id, source_id: sourceId, kind, question, answer, position, retired,
+        id, topic_id: topicId, kind, question, answer, source, position, retired,
         created_at: birth.toISOString(), updated_at: now.toISOString()
       }, f).run();
       nPrompts++;
     }
 
-    // Active prompts: one authoring file per source (every source gets a file, even an
-    // empty-bodied one, per buildExportZip), so this alone recreates every source row.
-    let nSources = 0;
-    const sourceIdByName = new Map<string, string>();
+    // Active prompts: one authoring file per topic (every topic gets a file, even an
+    // empty-bodied one, per buildExportZip), so this alone recreates every topic row.
+    let nTopics = 0;
+    const topicIdByName = new Map<string, string>();
     for (const { file } of parsed) {
-      const sid = await insertSource(env.DB, {
+      const tid = await insertTopic(env.DB, {
         name: file.name, url: file.url, meta: JSON.stringify(file.meta), created_at: now.toISOString()
       });
-      sourceIdByName.set(file.name, sid);
-      nSources++;
+      topicIdByName.set(file.name, tid);
+      nTopics++;
       let pos = 0;
       for (const p of file.prompts as (ParsedPrompt & { id: string })[]) {
-        await insertRestoredPrompt(p.id, sid, p.kind, p.question, p.answer, pos++, 0);
+        await insertRestoredPrompt(p.id, tid, p.kind, p.question, p.answer, p.source, pos++, 0);
       }
     }
 
-    // Archived (retired) prompts: find their source by name (created above in the
-    // common case — every source gets a file); create it only if that source turns out
+    // Archived (retired) prompts: find their topic by name (created above in the
+    // common case — every topic gets a file); create it only if that topic turns out
     // to hold nothing but retired prompts and somehow got no file of its own.
+    // `source_name` is the legacy pre-rename key for the same field.
     const archive: ArchiveLine[] = files["retired.jsonl"]
       ? strFromU8(files["retired.jsonl"]).trim().split("\n").filter(Boolean).map(l => JSON.parse(l))
       : [];
     for (const a of archive) {
-      let sid = sourceIdByName.get(a.source_name);
-      if (!sid) {
-        sid = await insertSource(env.DB, { name: a.source_name, url: null, created_at: now.toISOString() });
-        sourceIdByName.set(a.source_name, sid);
-        nSources++;
+      const topicName = a.topic_name ?? a.source_name;
+      if (!topicName) throw new Error("retired.jsonl line missing topic_name");
+      let tid = topicIdByName.get(topicName);
+      if (!tid) {
+        tid = await insertTopic(env.DB, { name: topicName, url: null, created_at: now.toISOString() });
+        topicIdByName.set(topicName, tid);
+        nTopics++;
       }
-      await insertRestoredPrompt(a.id, sid, a.kind, a.question, a.answer, a.position, 1);
+      await insertRestoredPrompt(a.id, tid, a.kind, a.question, a.answer, a.source ?? null, a.position, 1);
     }
 
     for (const e of log) {
@@ -337,9 +342,10 @@ export async function restoreFromZip(
         if (kv) fields[kv[1]] = kv[2];
       }
       await env.DB.prepare(
-        "INSERT INTO captures (id, created_at, text, url, title, note, image_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO captures (id, created_at, text, url, title, note, image_id, topic) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       ).bind(m[1], fields["captured"] ?? now.toISOString(), (fm ? fm[2] : text).trim(),
-             fields["url"] ?? null, fields["title"] ?? null, fields["note"] ?? null, fields["image"] ?? null).run();
+             fields["url"] ?? null, fields["title"] ?? null, fields["note"] ?? null, fields["image"] ?? null,
+             fields["topic"] ?? null).run();
     }
 
     const index = files["assets/index.json"]
@@ -360,7 +366,7 @@ export async function restoreFromZip(
         if (s[k] !== undefined) await setSetting(env.DB, k, String(s[k]));
       }
     }
-    return { sources: nSources, prompts: nPrompts, events: log.length };
+    return { topics: nTopics, prompts: nPrompts, events: log.length };
   } catch (e) {
     await wipeAll(env);
     throw e;

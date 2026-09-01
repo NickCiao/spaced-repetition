@@ -12,7 +12,7 @@ export const AUTH = { headers: AUTH_HEADERS };
  * prompts reference other rows.
  */
 export async function wipeData(): Promise<void> {
-  for (const table of ["events", "prompts", "sources", "captures"]) {
+  for (const table of ["events", "prompts", "topics", "captures"]) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
 }

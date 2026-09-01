@@ -32,7 +32,7 @@ describe("foreign import", () => {
 Unique foreign import Q?	Unique foreign import A.`;
     const before = await env.DB.prepare("SELECT COUNT(*) AS n FROM prompts").first<{ n: number }>();
 
-    const dry = await post("/import/foreign?apply=0&source=ForeignTest", tsv);
+    const dry = await post("/import/foreign?apply=0&topic=ForeignTest", tsv);
     expect(dry.status).toBe(200);
     const preview = await dry.json() as { preview: { created: number } };
     expect(preview.preview.created).toBe(1);
@@ -40,7 +40,7 @@ Unique foreign import Q?	Unique foreign import A.`;
     const mid = await env.DB.prepare("SELECT COUNT(*) AS n FROM prompts").first<{ n: number }>();
     expect(mid?.n).toBe(before?.n);
 
-    const applied = await post("/import/foreign?apply=1&source=ForeignTest", tsv);
+    const applied = await post("/import/foreign?apply=1&topic=ForeignTest", tsv);
     expect(applied.status).toBe(200);
     const after = await env.DB.prepare("SELECT COUNT(*) AS n FROM prompts").first<{ n: number }>();
     expect(after?.n).toBe((before?.n ?? 0) + 1);
@@ -55,8 +55,8 @@ Unique foreign import Q?	Unique foreign import A.`;
     const tsv = `#separator:tab
 #html:true
 Dedup foreign Q?	Dedup foreign A.`;
-    await post("/import/foreign?apply=1&source=ForeignDedup", tsv);
-    const res = await post("/import/foreign?apply=1&source=ForeignDedup", tsv);
+    await post("/import/foreign?apply=1&topic=ForeignDedup", tsv);
+    const res = await post("/import/foreign?apply=1&topic=ForeignDedup", tsv);
     const body = await res.json() as { applied: { created: number; skipped: number } };
     expect(body.applied.created).toBe(0);
     expect(body.applied.skipped).toBe(1);
@@ -72,8 +72,8 @@ Dedup foreign Q?	Dedup foreign A.`;
     const zip = zipSync({ "data.json": strToU8(JSON.stringify(data)) });
     const res = await post("/import/foreign?apply=0", zip);
     expect(res.status).toBe(200);
-    const body = await res.json() as { preview: { created: number; sources: { name: string }[] } };
+    const body = await res.json() as { preview: { created: number; topics: { name: string }[] } };
     expect(body.preview.created).toBe(1);
-    expect(body.preview.sources[0].name).toBe("Mochi Deck");
+    expect(body.preview.topics[0].name).toBe("Mochi Deck");
   });
 });

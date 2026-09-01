@@ -1,8 +1,9 @@
-export type SourceRow = {
+export type TopicRow = {
   id: string; name: string; url: string | null; meta: string; created_at: string;
 };
 export type PromptRow = {
-  id: string; source_id: string; kind: "qa" | "cloze"; question: string; answer: string;
+  id: string; topic_id: string; kind: "qa" | "cloze"; question: string; answer: string;
+  source: string | null;
   position: number; retired: number; flag_note: string | null;
   created_at: string; updated_at: string;
   due: string; stability: number; difficulty: number; elapsed_days: number;
@@ -10,7 +11,7 @@ export type PromptRow = {
 };
 export type CaptureRow = {
   id: string; created_at: string; text: string; url: string | null; title: string | null;
-  note: string | null; image_id: string | null; status: "pending" | "consumed";
+  note: string | null; image_id: string | null; topic: string | null; status: "pending" | "consumed";
 };
 export type EventRow = {
   id: number; ts: string; prompt_id: string;
@@ -33,14 +34,14 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
-/** Insert a source row and return its new id. */
-export async function insertSource(
+/** Insert a topic row and return its new id. */
+export async function insertTopic(
   db: D1Database,
-  s: { name: string; url: string | null; created_at: string; meta?: string }
+  t: { name: string; url: string | null; created_at: string; meta?: string }
 ): Promise<string> {
   const id = newId();
-  await db.prepare("INSERT INTO sources (id, name, url, meta, created_at) VALUES (?, ?, ?, ?, ?)")
-    .bind(id, s.name, s.url, s.meta ?? "{}", s.created_at).run();
+  await db.prepare("INSERT INTO topics (id, name, url, meta, created_at) VALUES (?, ?, ?, ?, ?)")
+    .bind(id, t.name, t.url, t.meta ?? "{}", t.created_at).run();
   return id;
 }
 
@@ -52,16 +53,16 @@ export async function insertSource(
 export function insertPromptStmt(
   db: D1Database,
   p: {
-    id: string; source_id: string; kind: "qa" | "cloze"; question: string; answer: string;
-    position: number; retired?: number; created_at: string; updated_at: string;
+    id: string; topic_id: string; kind: "qa" | "cloze"; question: string; answer: string;
+    source?: string | null; position: number; retired?: number; created_at: string; updated_at: string;
   },
   f: SchedFields
 ): D1PreparedStatement {
   return db.prepare(
-    `INSERT INTO prompts (id, source_id, kind, question, answer, position, retired, created_at, updated_at,
+    `INSERT INTO prompts (id, topic_id, kind, question, answer, source, position, retired, created_at, updated_at,
       due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(p.id, p.source_id, p.kind, p.question, p.answer, p.position, p.retired ?? 0,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(p.id, p.topic_id, p.kind, p.question, p.answer, p.source ?? null, p.position, p.retired ?? 0,
          p.created_at, p.updated_at,
          f.due, f.stability, f.difficulty, f.elapsed_days, f.scheduled_days,
          f.reps, f.lapses, f.state, f.last_review);

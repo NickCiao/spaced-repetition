@@ -11,10 +11,11 @@ const jpost = (path: string, body: unknown) =>
   });
 
 async function seedViaApi() {
-  const cap = await jpost("/api/capture", { text: "seed", title: "Imp Source", url: "https://imp.example" });
+  const cap = await jpost("/api/capture", { text: "seed", title: "Imp Topic", url: "https://imp.example" });
   const { id } = await cap.json() as { id: string };
   const ref = await jpost("/api/refine", {
-    capture_id: id, source: { name: "Imp Source", url: "https://imp.example" },
+    capture_id: id, topic: { name: "Imp Topic" },
+    source: "[Imp Topic](https://imp.example)",
     prompts: [
       { kind: "qa", question: "IQ1?", answer: "IA1" },
       { kind: "qa", question: "IQ2?", answer: "IA2" }
@@ -48,6 +49,11 @@ describe("export / import / restore", () => {
     expect(settings).not.toHaveProperty("base_url");
     expect(settings).not.toHaveProperty("resend_key_set");
 
+    // The authoring file carries the topic frontmatter and per-prompt S: lines.
+    const md = strFromU8(files[names.find(n => n.startsWith("prompts/"))!]);
+    expect(md).toContain("topic: Imp Topic");
+    expect(md).toContain("S: [Imp Topic](https://imp.example)");
+
     const dry = await post("/import?apply=0", zipSync(files));
     expect(dry.status).toBe(200);
     const { diff } = await dry.json() as any;
@@ -60,9 +66,9 @@ describe("export / import / restore", () => {
     // The write-side normalization in /api/prompt exists to keep export → dry-run
     // diffs at zero (parse trims trailing blank lines); this locks that in for the
     // prompt-form path, which seedViaApi (refine) does not cover.
-    const src = await jpost("/api/source", { name: "Trailing Src" });
-    const { id: sid } = await src.json() as { id: string };
-    const res = await jpost("/api/prompt", { source_id: sid, kind: "qa", question: "TQ?  ", answer: "TA.\n\n" });
+    const topic = await jpost("/api/topic", { name: "Trailing Topic" });
+    const { id: tid } = await topic.json() as { id: string };
+    const res = await jpost("/api/prompt", { topic_id: tid, kind: "qa", question: "TQ?  ", answer: "TA.\n\n", source: " padded source " });
     expect(res.status).toBe(200);
 
     const dry = await post("/import?apply=0", zipSync(await download()));
@@ -73,16 +79,16 @@ describe("export / import / restore", () => {
     expect(diff.retired).toEqual([]);
   });
 
-  it("edit + delete + add are detected and applied", async () => {
+  it("edit + delete + add are detected and applied, including source edits", async () => {
     await seedViaApi();
     const files = await download();
     const mdName = Object.keys(files).find(n => n.startsWith("prompts/") && strFromU8(files[n]).includes("IQ1?"))!;
     let text = strFromU8(files[mdName]);
     text = text.replace("IA1", "IA1-edited");                       // edit one
     const lines = text.split("\n");
-    const q2 = lines.findIndex(l => l === "Q: IQ2?");               // delete the other (Q,A,id + blank)
-    lines.splice(q2 - 1, 4);
-    text = lines.join("\n") + "\nQ: brand new?\nA: yes.\n";         // add one without id
+    const q2 = lines.findIndex(l => l === "Q: IQ2?");               // delete the other (Q,A,S,id + blank)
+    lines.splice(q2 - 1, 5);
+    text = lines.join("\n") + "\nQ: brand new?\nA: yes.\nS: hand-written source\n";  // add one without id
     files[mdName] = strToU8(text);
 
     const dry = await (await post("/import?apply=0", zipSync(files))).json() as any;
@@ -97,6 +103,23 @@ describe("export / import / restore", () => {
     expect(edited?.answer).toBe("IA1-edited");
     const gone = await env.DB.prepare("SELECT retired FROM prompts WHERE question = 'IQ2?'").first();
     expect(gone?.retired).toBe(1);
+    const added = await env.DB.prepare("SELECT source FROM prompts WHERE question = 'brand new?'").first();
+    expect(added?.source).toBe("hand-written source");
+  });
+
+  it("changing only a prompt's S: line is an edit", async () => {
+    await seedViaApi();
+    const files = await download();
+    const mdName = Object.keys(files).find(n => n.startsWith("prompts/") && strFromU8(files[n]).includes("IQ1?"))!;
+    files[mdName] = strToU8(strFromU8(files[mdName])
+      .replace("S: [Imp Topic](https://imp.example)\n", "S: rewritten attribution\n"));
+
+    const dry = await (await post("/import?apply=0", zipSync(files))).json() as any;
+    expect(dry.diff.edited.length).toBe(1); // replace() hits only the first block's S: line
+    const applied = await (await post("/import?apply=1", zipSync(files))).json() as any;
+    expect(applied.applied.edited).toBe(1);
+    const row = await env.DB.prepare("SELECT source FROM prompts WHERE question = 'IQ1?'").first();
+    expect(row?.source).toBe("rewritten attribution");
   });
 
   it("unknown id rejects the whole import", async () => {
@@ -115,23 +138,68 @@ describe("export / import / restore", () => {
     const files = await download();
     expect((await post("/import?apply=1&restore=1", zipSync(files))).status).toBe(409);
 
-    const before = await env.DB.prepare("SELECT id, due, stability, reps FROM prompts WHERE question = 'IQ1?'").first();
+    const before = await env.DB.prepare("SELECT id, due, stability, reps, source FROM prompts WHERE question = 'IQ1?'").first();
     await wipeData();
 
     const res = await post("/import?apply=1&restore=1", zipSync(files));
     expect(res.status).toBe(200);
-    const after = await env.DB.prepare("SELECT id, due, stability, reps FROM prompts WHERE question = 'IQ1?'").first();
+    const after = await env.DB.prepare("SELECT id, due, stability, reps, source FROM prompts WHERE question = 'IQ1?'").first();
     expect(after?.id).toBe(before?.id);          // ids preserved
     expect(after?.reps).toBe(before?.reps);      // replayed
     expect(after?.stability).toBe(before?.stability);
     expect(after?.due).toBe(before?.due);
+    expect(after?.source).toBe(before?.source);  // attribution survives restore
+  });
+
+  it("restores a pre-rename zip: legacy source: frontmatter and source_name archive key", async () => {
+    const legacyMd = "---\nsource: Legacy Book\nurl: https://legacy.example\n---\n" +
+      "\nQ: legacy-q?\nA: legacy-a.\n<!-- id: legacyid01 -->\n";
+    const legacyRetired = JSON.stringify({
+      id: "legacyid02", source_name: "Legacy Book", kind: "qa",
+      question: "legacy-retired?", answer: "ra.", position: 1
+    }) + "\n";
+    const zip = zipSync({
+      "prompts/legacy-book-aaaaaaaaaa.md": strToU8(legacyMd),
+      "retired.jsonl": strToU8(legacyRetired),
+      "settings.json": strToU8("{}")
+    });
+
+    const res = await post("/import?apply=1&restore=1", zip);
+    expect(res.status).toBe(200);
+    const body = await res.json() as any;
+    expect(body.restored).toEqual({ topics: 1, prompts: 2, events: 0 });
+
+    const topic = await env.DB.prepare("SELECT * FROM topics WHERE name = 'Legacy Book'").first();
+    expect(topic?.url).toBe("https://legacy.example");
+    const active = await env.DB.prepare("SELECT retired, source, topic_id FROM prompts WHERE id = 'legacyid01'").first();
+    expect(active?.retired).toBe(0);
+    expect(active?.source).toBeNull();
+    expect(active?.topic_id).toBe(topic?.id);
+    const retired = await env.DB.prepare("SELECT retired FROM prompts WHERE id = 'legacyid02'").first();
+    expect(retired?.retired).toBe(1);
+
+    // The next export writes the renamed keys — the legacy shape is upgrade-on-restore.
+    const files = await download();
+    const mdName = Object.keys(files).find(n => n.startsWith("prompts/"))!;
+    expect(strFromU8(files[mdName])).toContain("topic: Legacy Book");
+    expect(strFromU8(files["retired.jsonl"])).toContain('"topic_name":"Legacy Book"');
+  });
+
+  it("a legacy dry-run import (source: frontmatter) still diffs cleanly", async () => {
+    await seedViaApi();
+    const files = await download();
+    const mdName = Object.keys(files).find(n => n.startsWith("prompts/"))!;
+    files[mdName] = strToU8(strFromU8(files[mdName]).replace("topic: ", "source: "));
+    const dry = await (await post("/import?apply=0", zipSync(files))).json() as any;
+    expect(dry.diff.edited).toEqual([]);
+    expect(dry.diff.newTopics).toEqual([]);
   });
 
   it("retired prompts survive export/restore; un-retired prompts stay active", async () => {
-    const cap = await jpost("/api/capture", { text: "seed3", title: "Archive Source", url: "https://arc.example" });
+    const cap = await jpost("/api/capture", { text: "seed3", title: "Archive Topic", url: "https://arc.example" });
     const { id: capId } = await cap.json() as { id: string };
     const ref = await jpost("/api/refine", {
-      capture_id: capId, source: { name: "Archive Source", url: "https://arc.example" },
+      capture_id: capId, topic: { name: "Archive Topic" }, source: "[arc](https://arc.example)",
       prompts: [
         { kind: "qa", question: "AQ-stays-retired?", answer: "AA1" },
         { kind: "qa", question: "AQ-comes-back?", answer: "AA2" }
@@ -145,15 +213,17 @@ describe("export / import / restore", () => {
     // comes back: retire it too (so it has a historical retire event), then un-retire
     // it via the edit form — that path flips the field directly and logs no event.
     await jpost("/api/grade", { prompt_id: comesBack, action: "retire" });
-    const row = await env.DB.prepare("SELECT source_id FROM prompts WHERE id = ?").bind(comesBack).first();
+    const row = await env.DB.prepare("SELECT topic_id FROM prompts WHERE id = ?").bind(comesBack).first();
     await jpost("/api/prompt", {
-      id: comesBack, source_id: row!.source_id, kind: "qa", question: "AQ-comes-back?", answer: "AA2", retired: false
+      id: comesBack, topic_id: row!.topic_id, kind: "qa", question: "AQ-comes-back?", answer: "AA2", retired: false
     });
     expect((await env.DB.prepare("SELECT retired FROM prompts WHERE id = ?").bind(stayRetired).first())?.retired).toBe(1);
     expect((await env.DB.prepare("SELECT retired FROM prompts WHERE id = ?").bind(comesBack).first())?.retired).toBe(0);
 
     const files = await download();
     expect(Object.keys(files)).toContain("retired.jsonl");
+    // The archive carries the attribution alongside the content.
+    expect(strFromU8(files["retired.jsonl"])).toContain('"source":"[arc](https://arc.example)"');
 
     await wipeData();
 
@@ -161,32 +231,33 @@ describe("export / import / restore", () => {
     expect(res.status).toBe(200);
 
     const after1 = await env.DB.prepare(
-      "SELECT retired, question, answer, kind FROM prompts WHERE id = ?"
+      "SELECT retired, question, answer, kind, source FROM prompts WHERE id = ?"
     ).bind(stayRetired).first();
     expect(after1?.retired).toBe(1);
     expect(after1?.question).toBe("AQ-stays-retired?");
     expect(after1?.answer).toBe("AA1");
     expect(after1?.kind).toBe("qa");
+    expect(after1?.source).toBe("[arc](https://arc.example)");
 
     const after2 = await env.DB.prepare("SELECT retired FROM prompts WHERE id = ?").bind(comesBack).first();
     expect(after2?.retired).toBe(0);
   });
 
   it("re-adding a retired prompt's block un-retires it on import", async () => {
-    const cap = await jpost("/api/capture", { text: "seed4", title: "Unretire Source" });
+    const cap = await jpost("/api/capture", { text: "seed4", title: "Unretire Topic" });
     const { id: capId } = await cap.json() as { id: string };
     const ref = await jpost("/api/refine", {
-      capture_id: capId, source: { name: "Unretire Source" },
+      capture_id: capId, topic: { name: "Unretire Topic" },
       prompts: [{ kind: "qa", question: "UQ?", answer: "UA." }]
     });
     const { prompt_ids: [rid] } = await ref.json() as { prompt_ids: string[] };
     await jpost("/api/grade", { prompt_id: rid, action: "retire" });
 
     // The retired prompt is only in retired.jsonl; write its block back into the
-    // source's (now empty-bodied) authoring file, as a user restoring it would.
+    // topic's (now empty-bodied) authoring file, as a user restoring it would.
     const files = await download();
     const mdName = Object.keys(files).find(n =>
-      n.startsWith("prompts/") && strFromU8(files[n]).includes("source: Unretire Source"))!;
+      n.startsWith("prompts/") && strFromU8(files[n]).includes("topic: Unretire Topic"))!;
     files[mdName] = strToU8(strFromU8(files[mdName]) + `\nQ: UQ?\nA: UA.\n<!-- id: ${rid} -->\n`);
 
     const dry = await (await post("/import?apply=0", zipSync(files))).json() as any;
@@ -201,12 +272,12 @@ describe("export / import / restore", () => {
   });
 
   it("a failed restore wipes inserted rows and unblocks retry", async () => {
-    // Valid prompts/ file: the active-file loop inserts this source + prompt before
+    // Valid prompts/ file: the active-file loop inserts this topic + prompt before
     // restoreFromZip ever looks at retired.jsonl.
-    const validFile = "---\nsource: Wipe Test Src\n---\n\nQ: wipe-q?\nA: wipe-a.\n<!-- id: wwwwwwwwww -->\n";
+    const validFile = "---\ntopic: Wipe Test Topic\n---\n\nQ: wipe-q?\nA: wipe-a.\n<!-- id: wwwwwwwwww -->\n";
     // Malformed retired.jsonl: JSON.parse throws while building the archive list, which
     // runs after the active-file loop's inserts — so the failure lands mid-restore,
-    // with a source and a prompt already committed, not before any writes happen.
+    // with a topic and a prompt already committed, not before any writes happen.
     const badZip = zipSync({
       "prompts/wipe-test.md": strToU8(validFile),
       "retired.jsonl": strToU8("not valid json\n"),
@@ -218,29 +289,31 @@ describe("export / import / restore", () => {
 
     const promptCount = await env.DB.prepare("SELECT COUNT(*) AS n FROM prompts").first();
     expect(promptCount?.n).toBe(0);
-    const sourceCount = await env.DB.prepare("SELECT COUNT(*) AS n FROM sources").first();
-    expect(sourceCount?.n).toBe(0);
+    const topicCount = await env.DB.prepare("SELECT COUNT(*) AS n FROM topics").first();
+    expect(topicCount?.n).toBe(0);
 
     // Retry with a good zip must succeed — not blocked by a stale non-empty-DB 409.
     const res2 = await post("/import?apply=1&restore=1", zipSync({ "settings.json": strToU8("{}") }));
     expect(res2.status).toBe(200);
     const body = await res2.json() as any;
-    expect(body.restored).toEqual({ sources: 0, prompts: 0, events: 0 });
+    expect(body.restored).toEqual({ topics: 0, prompts: 0, events: 0 });
   });
 
-  it("a capture's note round-trips through export and restore", async () => {
-    const cap = await jpost("/api/capture", { text: "note-cap", note: "remember this bit" });
+  it("a capture's note and topic round-trip through export and restore", async () => {
+    const cap = await jpost("/api/capture", { text: "note-cap", note: "remember this bit", topic: "Round Trip" });
     const { id: capId } = await cap.json() as { id: string };
 
     const files = await download();
     expect(strFromU8(files[`inbox/${capId}.md`])).toContain("note: remember this bit");
+    expect(strFromU8(files[`inbox/${capId}.md`])).toContain("topic: Round Trip");
 
     await wipeData();
 
     const res = await post("/import?apply=1&restore=1", zipSync(files));
     expect(res.status).toBe(200);
 
-    const row = await env.DB.prepare("SELECT note FROM captures WHERE id = ?").bind(capId).first();
+    const row = await env.DB.prepare("SELECT note, topic FROM captures WHERE id = ?").bind(capId).first();
     expect(row?.note).toBe("remember this bit");
+    expect(row?.topic).toBe("Round Trip");
   });
 });
