@@ -23,7 +23,7 @@ At a high level, this project is one Cloudflare Worker with a few companion UI s
 - Built as personal infrastructure, not as a service.
 
 
-## Deploy your own
+# Operator Manual
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/NickCiao/spaced-repetition)
 
