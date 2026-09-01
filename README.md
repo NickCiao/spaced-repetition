@@ -12,7 +12,9 @@ I tried [Mochi](https://mochi.cards/) & [Anki](https://apps.ankiweb.net/), but t
 
 This project is heavily inspired by [Orbit](https://github.com/andymatuschak/orbit). However, Orbit is primarily a research/learning prototype whose main audience is content creators who want to write articles in the "mnemonic-medium" style (like [Quantum Country](https://quantum.country/)).
 
-At a high level, this project is one Cloudflare Worker with a few companion UI surfaces. It helps you captures ideas without interrupting reading, preserves the work of deliberate prompt authoring (since research shows that's where a lot of the learning/processing is happening), and schedules review sessions using a longitudinal model of the learner’s memory.
+At a high level, this project is one Cloudflare Worker with a few companion UI surfaces. It helps you capture ideas without interrupting reading, preserves the work of deliberate prompt authoring (since research shows that's where a lot of the learning/processing is happening), and schedules review sessions using a longitudinal model of the learner’s memory.
+
+![Capture an idea, refine it into a prompt, receive a timely reminder, and review it](assets/resurface-loop.gif)
 
 # Design principles
 
@@ -22,6 +24,9 @@ At a high level, this project is one Cloudflare Worker with a few companion UI s
 - You own your data.
 - Built as personal infrastructure, not as a service.
 
+# How adaptive learning works
+
+Each prompt has its own evolving memory model. After a review, **Remembered** or **Forgot** updates the model's estimate of how stable that memory is, then schedules the next review based on your chosen retention target. Forgotten prompts show up again sooner; stable memories take longer to resurface. We only notify when a useful session has accumulated or waiting longer is likely to hurt recall.
 
 # Operator Manual
 
