@@ -45,7 +45,7 @@ Email is configured in **Settings** after deploy (Resend API key + destination).
 
 On the phone: open `/capture`, then Share → Add to Home Screen.
 
-## Ops
+## Commands
 
 | Command | What |
 |---------|------|
