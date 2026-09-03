@@ -205,7 +205,48 @@ export async function resolveMailConfig(env: Env): Promise<{
   };
 }
 
-async function sendReminder(
+/** Compose the magic-link sign-in email. `link` is the one-time verify URL; the
+ *  long-lived SR_TOKEN never appears in email. */
+export function composeLoginEmail(
+  link: string, baseUrl: string
+): { subject: string; html: string; text: string } {
+  const subject = "Sign in to Resurface";
+  const base = baseUrl.replace(/\/$/, "");
+  const url = escapeHtml(link);
+  const iconUrl = escapeHtml(base + "/static/icon-mono-56.png");
+  const bodyText = "Tap the button to sign this device in.";
+  const footerText =
+    "This link works once and expires in 15 minutes. If you didn't request it, you can ignore this email.";
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:24px 16px;font-family:${FONT};color:${NOCTURNE.text};-webkit-font-smoothing:antialiased">
+<div style="max-width:440px;margin:0 auto">
+  <div style="background:${NOCTURNE.surface};border-radius:8px;padding:22px 24px 20px">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px">
+      <tr>
+        <td style="padding-right:8px;vertical-align:middle"><img src="${iconUrl}" width="14" height="14" alt="" style="display:block;border:0"></td>
+        <td style="vertical-align:middle;font-family:${FONT};font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:${NOCTURNE.muted}">Resurface</td>
+      </tr>
+    </table>
+    <p style="margin:0 0 12px;font-size:28px;line-height:1.15;font-weight:500;letter-spacing:-0.015em;color:${NOCTURNE.text}">Sign in</p>
+    <p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:${NOCTURNE.muted}">${escapeHtml(bodyText)}</p>
+    <a href="${url}" style="display:inline-block;padding:12px 24px;background:${NOCTURNE.accent};border-radius:8px;color:${NOCTURNE.bg};font-family:${FONT};font-size:14px;font-weight:600;line-height:1.2;text-decoration:none">Sign in</a>
+    <div style="height:1px;margin:24px 0 16px;background-color:${DIVIDER_FALLBACK};background-image:linear-gradient(to right,${NOCTURNE.surface},${DIVIDER_FALLBACK} 12%,${DIVIDER_FALLBACK} 88%,${NOCTURNE.surface})"></div>
+    <p style="margin:0;font-size:11px;line-height:1.45;color:${NOCTURNE.muted}">${escapeHtml(footerText)}</p>
+  </div>
+</div>
+</body>
+</html>`;
+  const text = [subject, bodyText, `Sign in: ${link}`, footerText].join("\n\n");
+  return { subject, html, text };
+}
+
+export async function sendMail(
   mail: { emailTo: string; resendKey: string; emailFrom: string },
   subject: string, html: string, text: string
 ): Promise<void> {
@@ -255,7 +296,7 @@ export async function runReminderCron(env: Env, now: Date): Promise<void> {
       }));
     } else {
       const { subject, html, text } = composeReminder(session.dueCount, mail.baseUrl, session.reason);
-      await sendReminder(mail, subject, html, text);
+      await sendMail(mail, subject, html, text);
     }
   }
   await setSetting(env.DB, "cadence", JSON.stringify(d.cadence));

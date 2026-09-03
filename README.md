@@ -32,7 +32,7 @@ Each prompt has its own evolving memory model. After a review, **Remembered** or
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/NickCiao/spaced-repetition)
 
-That provisions D1 + R2, runs database migrations, and prompts for `SR_TOKEN`. Then open `https://<your-worker>/?token=<SR_TOKEN>` once; the cookie handles auth in the future.
+That provisions D1 + R2 and runs database migrations. When Cloudflare asks for `SR_TOKEN`, generate and save a long, unique access key in your password manager, then paste it into the field. After deployment, open `https://<your-worker>/` and sign in from the login page — paste the token once, or (after email is configured in Settings) use **Email me a sign-in link** on any new device. Each browser signs in once; a cookie handles auth from then on.
 
 **Or from a clone:**
 
@@ -63,7 +63,8 @@ On the phone: open `/capture`, then Share → Add to Home Screen.
 
 ```bash
 npm install
-cp .dev.vars.example .dev.vars   # SR_TOKEN preset; optional RESEND_* for local sends without Settings
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars and set SR_TOKEN=devtoken for local development
 npm run migrate:local
 npm run dev
 npm test

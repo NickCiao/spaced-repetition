@@ -19,7 +19,7 @@
   "cloudflare": {
     "bindings": {
       "SR_TOKEN": {
-        "description": "Long random auth token for your private instance. Generate with `openssl rand -hex 32`. After deploy, open `/?token=YOUR_TOKEN` once to set the cookie. Reminder email is configured later in **Settings** (not required to deploy)."
+        "description": "Create a long, unique access key in your password manager, save it, and paste it here. After deployment, open `/?token=YOUR_ACCESS_KEY` once to connect your browser. Reminder email is configured later in **Settings** and is not required."
       }
     }
   },

@@ -1,4 +1,6 @@
-SR_TOKEN=devtoken
+# Required. The Deploy to Cloudflare flow prompts for this as a production secret.
+# For local development only, set it to devtoken after copying this file.
+SR_TOKEN=
 # Optional local overrides (Settings UI is preferred in production):
 # RESEND_API_KEY=re_your_key
 # EMAIL_TO=you@example.com

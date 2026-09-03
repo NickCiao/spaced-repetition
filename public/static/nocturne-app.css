@@ -316,3 +316,30 @@ button.seg-opt { background: none; border: 0; color: inherit; font: inherit; }
 .row-create { display: flex; flex-direction: column; gap: var(--space-3); }
 .row-create[hidden] { display: none; }
 .row-create .note { color: color-mix(in srgb, var(--color-text) 48%, transparent); }
+
+/* ── sign-in (unauthenticated, no shell) ───────────────────────────── */
+.login {
+  max-width: 340px; margin: 0 auto;
+  padding: max(18vh, 64px) 16px 48px;
+  display: flex; flex-direction: column; gap: var(--space-4);
+}
+.login-brand {
+  display: flex; align-items: center; gap: 9px;
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 14px; letter-spacing: 0.01em;
+  margin-bottom: var(--space-6);
+}
+.login-brand svg { flex: none; }
+.login-title { font-size: 32px; line-height: 1.12; letter-spacing: -0.015em; margin: 0; }
+.login-note { font-size: 15px; line-height: 1.5; margin: 0; color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+.login-notice { color: var(--color-accent-300); }
+.login-error { color: var(--color-text); }
+.login-form { display: flex; flex-direction: column; gap: var(--space-3); margin: 0; }
+.login-form .btn { width: 100%; padding: var(--space-3); font-size: 15px; }
+.login-alt { margin-top: var(--space-4); }
+.login-alt summary {
+  font-size: 12px; cursor: pointer;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+.login-alt summary:hover { color: var(--color-accent); }
+.login-alt .login-form { margin-top: var(--space-3); }

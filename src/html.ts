@@ -18,7 +18,7 @@ export type AppPage = "review" | "capture" | "inbox" | "browse" | "settings";
 
 // Fish mono mark (see assets/icon/handoff.md). The eye knockout is faked with the
 // page bg colour; the standalone icon-mono.svg uses a real mask.
-const FISH_MARK = `<svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><path d="M6 41 H58" stroke="var(--color-accent)" stroke-width="3" stroke-linecap="round"/><g transform="rotate(22 30 33)" fill="var(--color-accent)"><path d="M40 32 Q51 20 56 22.5 Q58.5 25 50.5 32.5 Q58.5 40 56 42.5 Q51 45 40 33.5 Z"/><ellipse cx="28" cy="33" rx="14" ry="11.5"/><circle cx="21" cy="29.5" r="3.2" fill="#161826"/></g><path d="M11 6.5 l2 4.9 4.9 2 -4.9 2 -2 4.9 -2 -4.9 -4.9 -2 4.9 -2 z" fill="var(--color-accent)"/></svg>`;
+export const FISH_MARK = `<svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><path d="M6 41 H58" stroke="var(--color-accent)" stroke-width="3" stroke-linecap="round"/><g transform="rotate(22 30 33)" fill="var(--color-accent)"><path d="M40 32 Q51 20 56 22.5 Q58.5 25 50.5 32.5 Q58.5 40 56 42.5 Q51 45 40 33.5 Z"/><ellipse cx="28" cy="33" rx="14" ry="11.5"/><circle cx="21" cy="29.5" r="3.2" fill="#161826"/></g><path d="M11 6.5 l2 4.9 4.9 2 -4.9 2 -2 4.9 -2 -4.9 -4.9 -2 4.9 -2 z" fill="var(--color-accent)"/></svg>`;
 
 const NAV: { page: AppPage; href: string; label: string; icon: string }[] = [
   { page: "review", href: "/", label: "Review", icon: "ph-cards" },
@@ -142,6 +142,7 @@ export function page(
     styles?: string[];
     bodyClass?: string;
     shell?: { active: AppPage } & NavCounts;
+    status?: number;
   } = {}
 ): Response {
   const styles = opts.styles ?? DEFAULT_STYLES;
@@ -171,5 +172,8 @@ ${(Array.isArray(opts.script) ? opts.script : opts.script ? [opts.script] : [])
   .map(s => `<script src="${s}"></script>`).join("\n")}
 </body>
 </html>`;
-  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+  return new Response(html, {
+    status: opts.status ?? 200,
+    headers: { "Content-Type": "text/html; charset=utf-8" }
+  });
 }

@@ -1,6 +1,11 @@
 import type { Env } from "./env.d";
 
-const PUBLIC = [/^\/health$/, /^\/sw\.js$/, /^\/favicon\.ico$/, /^\/static\//];
+const PUBLIC = [/^\/health$/, /^\/sw\.js$/, /^\/favicon\.ico$/, /^\/static\//, /^\/auth\//];
+
+/** The long-lived session cookie, set on `?token=` login and on magic-link verify. */
+export function authCookie(token: string): string {
+  return `sr=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000`;
+}
 
 export function requireAuth(request: Request, env: Env): Response | null {
   const url = new URL(request.url);
@@ -12,10 +17,7 @@ export function requireAuth(request: Request, env: Env): Response | null {
     url.searchParams.delete("token");
     return new Response(null, {
       status: 302,
-      headers: {
-        Location: url.toString(),
-        "Set-Cookie": `sr=${env.SR_TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000`
-      }
+      headers: { Location: url.toString(), "Set-Cookie": authCookie(env.SR_TOKEN) }
     });
   }
 

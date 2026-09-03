@@ -7,6 +7,7 @@ import { serveAsset, uploadAsset } from "./routes/assets";
 import { deleteCapture, inboxPage, previewApi, refineApi, refinePage } from "./routes/inbox";
 import { browseIndex, browseTopic, deletePrompt, promptApi, promptForm, topicApi } from "./routes/browse";
 import { settingsApi, settingsPage } from "./routes/settings";
+import { emailLoginLink, loginPage, verifyLogin } from "./routes/auth";
 import { exportZip, importForeign, importZip } from "./routes/transfer";
 import { runReminderCron } from "./email";
 
@@ -16,6 +17,14 @@ export default {
     if (denied) {
       // Successful ?token=… redirect: learn the public origin while we still have the request.
       if (denied.status === 302) ctx.waitUntil(rememberBaseUrl(env.DB, request.url));
+      // Browser navigations get a sign-in screen instead of the bare 401; API
+      // callers (fetch, curl, Shortcuts) keep the plain text response.
+      if (denied.status === 401 && request.method === "GET" &&
+          (request.headers.get("Accept") ?? "").includes("text/html")) {
+        const u = new URL(request.url);
+        u.searchParams.delete("token");
+        return loginPage({ redirect: u.pathname + u.search });
+      }
       return denied;
     }
     const url = new URL(request.url);
@@ -26,6 +35,11 @@ export default {
       return env.ASSETS.fetch(new Request(new URL("/static/favicon-32.png", url), request));
     }
     if (request.method === "GET" && /^\/(sw\.js$|static\/)/.test(url.pathname)) return env.ASSETS.fetch(request);
+
+    // Magic-link sign-in: public by necessity, handled before rememberBaseUrl so
+    // an unauthenticated request can never seed the app's public origin.
+    if (url.pathname === "/auth/email" && request.method === "POST") return emailLoginLink(request, env);
+    if (url.pathname === "/auth/verify" && request.method === "GET") return verifyLogin(request, env);
 
     ctx.waitUntil(rememberBaseUrl(env.DB, request.url));
 

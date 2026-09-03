@@ -11,7 +11,12 @@ export default defineConfig(async () => {
         miniflare: {
           bindings: {
             TEST_MIGRATIONS: migrations,
-            SR_TOKEN: "test-token"
+            SR_TOKEN: "test-token",
+            // Mail config must come from D1 settings in tests, never from the
+            // developer's local .dev.vars secrets.
+            EMAIL_TO: "",
+            RESEND_API_KEY: "",
+            BASE_URL: ""
           }
         }
       })

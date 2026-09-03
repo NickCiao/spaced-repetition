@@ -8,7 +8,7 @@ A stranger should be able to stand up their own private instance with minimal Cl
 
 ## Deploy paths
 
-1. **Deploy to Cloudflare button** (README) — clones the public repo into the user’s GitHub/GitLab, provisions D1 + R2 from `wrangler.jsonc`, runs the `deploy` script (migrations via D1 binding `DB`, then `wrangler deploy`), and prompts for the only required secret: `SR_TOKEN` (described in `package.json` → `cloudflare.bindings`).
+1. **Deploy to Cloudflare button** (README) — clones the public repo into the user’s GitHub/GitLab, provisions D1 + R2 from `wrangler.jsonc`, runs the `deploy` script (migrations via D1 binding `DB`, then `wrangler deploy`), and prompts for the only required secret: `SR_TOKEN` (described in `package.json` → `cloudflare.bindings`). The committed `.dev.vars.example` deliberately leaves this value blank so the deploy form cannot suggest a shared development credential; the user generates and saves a long, unique access key in their password manager.
 2. **`npm run setup`** — interactive terminal wizard: login, create/reuse D1 `sr` (writes `database_id` into `wrangler.jsonc`), create/reuse R2 `sr-assets`, apply remote migrations, set `SR_TOKEN`, deploy, print the one-time `/?token=…` URL.
 
 Both paths leave reminder email unset. The app is fully usable without it.
@@ -17,7 +17,7 @@ Both paths leave reminder email unset. The app is fully usable without it.
 
 | Value | Where | Notes |
 |---|---|---|
-| `SR_TOKEN` | Worker secret | Only deploy-time secret. Open `/?token=…` once per browser. |
+| `SR_TOKEN` | Worker secret | Only deploy-time secret. The deploy-button user supplies a saved, unique access key; the CLI setup generates one. Sign in once per browser: paste the token on the sign-in screen (or `/?token=…`), or use the email magic link once mail is configured (see `2026-09-03-multi-device-login.md`). |
 | App URL (`base_url`) | D1 settings | Learned from the first authenticated request origin; editable in Settings (custom domains). |
 | Email to / Resend API key | D1 settings | Settings → Reminder. Empty ⇒ cron decides “send” but skips the provider call. |
 | `EMAIL_FROM` | Wrangler var / optional secret | Defaults to `Resurface <onboarding@resend.dev>` (Resend test sender, “Resurface” display name); override with a verified domain for production, keeping the `Name <address>` format. |

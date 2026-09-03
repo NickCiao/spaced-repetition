@@ -18,11 +18,11 @@ Single-user spaced-repetition app: capture → refine → review → export/impo
 **Do not violate:**
 - Binary grades only (`remembered`/`forgot`). No streaks, stats, or counters.
 - FSRS: `enable_fuzz: false`, `enable_short_term: false` — restore replays the event log deterministically.
-- Auth on all routes except `/health`, `/sw.js`, `/static/*`.
+- Auth on all routes except `/health`, `/sw.js`, `/static/*`, `/auth/*` (magic-link sign-in; codes single-use, 15 min, hashed at rest).
 - Import: dry-run by default; reject whole zip on parse errors.
 - Runtime deps: `ts-fsrs`, `marked`, `katex`, `fflate` only. Ask before adding anything.
 
-**Dev:** `npm run migrate:local` · copy `.dev.vars.example` → `.dev.vars` · `npm run dev` · `/?token=devtoken` · first-time prod: `npm run setup` or Deploy to Cloudflare button · ops in README
+**Dev:** `npm run migrate:local` · copy `.dev.vars.example` → `.dev.vars` and set `SR_TOKEN=devtoken` · `npm run dev` · `/?token=devtoken` · first-time prod: `npm run setup` or Deploy to Cloudflare button · ops in README
 **Test:** `npm test`. Route tests use `exports.default.fetch` + auth/wipe helpers from `test/helpers.ts`.
 
 **When changing:** new routes → `src/routes/` + wire `index.ts` + test. Schema → new `migrations/` file. Use `escapeHtml()`, parameterized SQL, `nowIso()` for timestamps. Deploy script must keep remote migrations on the D1 **binding** name (`DB`) so the Deploy to Cloudflare button works when users rename the database.
