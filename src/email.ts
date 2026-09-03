@@ -138,6 +138,20 @@ export function reminderReasonText(reason: SessionReadyReason): string {
 const DIVIDER_FALLBACK = "#434550";
 const FONT = "Inter,system-ui,-apple-system,sans-serif";
 
+// Brand lockup shared by every email. Fish mono mark served as a PNG from
+// /static (auth-exempt): Gmail strips inline <svg>, and image proxies can fetch
+// it. Rendered from assets/icon/icon-mono.svg at 56px, shown at 28px (2x —
+// the retina ceiling for this source; render a larger PNG before going bigger).
+function emailHeader(base: string): string {
+  const iconUrl = escapeHtml(base + "/static/icon-mono-56.png");
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px">
+      <tr>
+        <td style="padding-right:11px;vertical-align:middle"><img src="${iconUrl}" width="28" height="28" alt="" style="display:block;border:0"></td>
+        <td style="vertical-align:middle;font-family:${FONT};font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:${NOCTURNE.muted}">Resurface</td>
+      </tr>
+    </table>`;
+}
+
 export function composeReminder(
   count: number, baseUrl: string, reason: SessionReadyReason
 ): { subject: string; html: string; text: string } {
@@ -148,9 +162,6 @@ export function composeReminder(
   const url = escapeHtml(base + "/");
   const reasonText = escapeHtml(reminderReasonText(reason));
   const footerText = "This is the only email this system sends. It backs off if you're busy.";
-  // Fish mono mark served as a PNG from /static (auth-exempt): Gmail strips inline
-  // <svg>, and image proxies can fetch it. Rendered from assets/icon/icon-mono.svg.
-  const iconUrl = escapeHtml(base + "/static/icon-mono-56.png");
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -161,12 +172,7 @@ export function composeReminder(
 <body style="margin:0;padding:24px 16px;font-family:${FONT};color:${NOCTURNE.text};-webkit-font-smoothing:antialiased">
 <div style="max-width:440px;margin:0 auto">
   <div style="background:${NOCTURNE.surface};border-radius:8px;padding:22px 24px 20px">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px">
-      <tr>
-        <td style="padding-right:8px;vertical-align:middle"><img src="${iconUrl}" width="14" height="14" alt="" style="display:block;border:0"></td>
-        <td style="vertical-align:middle;font-family:${FONT};font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:${NOCTURNE.muted}">Resurface</td>
-      </tr>
-    </table>
+    ${emailHeader(base)}
     <p style="margin:0 0 12px;font-size:28px;line-height:1.15;font-weight:500;letter-spacing:-0.015em">
       <span style="color:${NOCTURNE.text}">${escapeHtml(countLabel)}</span>
       <span style="color:${NOCTURNE.muted}"> · ~${mins} min</span>
@@ -213,7 +219,6 @@ export function composeLoginEmail(
   const subject = "Sign in to Resurface";
   const base = baseUrl.replace(/\/$/, "");
   const url = escapeHtml(link);
-  const iconUrl = escapeHtml(base + "/static/icon-mono-56.png");
   const bodyText = "Tap the button to sign this device in.";
   const footerText =
     "This link works once and expires in 15 minutes. If you didn't request it, you can ignore this email.";
@@ -227,12 +232,7 @@ export function composeLoginEmail(
 <body style="margin:0;padding:24px 16px;font-family:${FONT};color:${NOCTURNE.text};-webkit-font-smoothing:antialiased">
 <div style="max-width:440px;margin:0 auto">
   <div style="background:${NOCTURNE.surface};border-radius:8px;padding:22px 24px 20px">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px">
-      <tr>
-        <td style="padding-right:8px;vertical-align:middle"><img src="${iconUrl}" width="14" height="14" alt="" style="display:block;border:0"></td>
-        <td style="vertical-align:middle;font-family:${FONT};font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:${NOCTURNE.muted}">Resurface</td>
-      </tr>
-    </table>
+    ${emailHeader(base)}
     <p style="margin:0 0 12px;font-size:28px;line-height:1.15;font-weight:500;letter-spacing:-0.015em;color:${NOCTURNE.text}">Sign in</p>
     <p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:${NOCTURNE.muted}">${escapeHtml(bodyText)}</p>
     <a href="${url}" style="display:inline-block;padding:12px 24px;background:${NOCTURNE.accent};border-radius:8px;color:${NOCTURNE.bg};font-family:${FONT};font-size:14px;font-weight:600;line-height:1.2;text-decoration:none">Sign in</a>
