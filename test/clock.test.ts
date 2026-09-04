@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { endOfLocalDay, localDate, localHour } from "../src/clock";
+import { endOfLocalDay, hourLabel, localDate, localHour, timeZoneOptions, timeZoneRegions } from "../src/clock";
 
 describe("clock", () => {
   it("endOfLocalDay is the next local midnight, as a UTC instant", () => {
@@ -45,5 +45,29 @@ describe("clock", () => {
     expect(localHour(new Date("2026-08-20T14:00:00Z"), "America/Los_Angeles")).toBe(7);
     expect(localHour(new Date("2026-08-20T14:00:00Z"), "UTC")).toBe(14);
     expect(localDate(new Date("2026-08-21T03:00:00Z"), "America/Los_Angeles")).toBe("2026-08-20");
+  });
+
+  it("hourLabel is 12-hour wall time on the hour", () => {
+    expect(hourLabel(0)).toBe("12:00 AM");
+    expect(hourLabel(6)).toBe("6:00 AM");
+    expect(hourLabel(12)).toBe("12:00 PM");
+    expect(hourLabel(18)).toBe("6:00 PM");
+    expect(hourLabel(23)).toBe("11:00 PM");
+  });
+
+  it("timeZoneOptions lists IANA zones and keeps a legacy selected id", () => {
+    const now = new Date("2026-09-04T14:00:00Z");
+    const opts = timeZoneOptions("US/Eastern", now);
+    expect(opts.some(z => z.id === "America/New_York")).toBe(true);
+    expect(opts.some(z => z.id === "America/Los_Angeles")).toBe(true);
+    const eastern = opts.find(z => z.id === "US/Eastern");
+    expect(eastern?.region).toBe("US");
+    const nyc = opts.find(z => z.id === "America/New_York");
+    expect(nyc?.label).toContain("New York");
+    expect(nyc?.region).toBe("America");
+    const regions = timeZoneRegions(opts);
+    expect(regions[0]).toBe("Africa");
+    expect(regions.indexOf("America")).toBeLessThan(regions.indexOf("Europe"));
+    expect(regions.indexOf("US")).toBeGreaterThan(regions.indexOf("Pacific"));
   });
 });

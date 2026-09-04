@@ -1,6 +1,40 @@
 import type { Env } from "../env.d";
+import { hourLabel, timeZoneOptions, timeZoneRegions } from "../clock";
 import { getSettings, setSetting } from "../db";
 import { escapeHtml, page, shellFor } from "../html";
+
+function selectWrap(id: string, options: string): string {
+  return `<div class="select-wrap">
+      <select class="input" id="${id}">${options}</select>
+      <i class="ph ph-caret-down" aria-hidden="true"></i>
+    </div>`;
+}
+
+function hourSelect(selected: number): string {
+  const options = Array.from({ length: 24 }, (_, h) => {
+    const sel = h === selected ? " selected" : "";
+    return `<option value="${h}"${sel}>${hourLabel(h)}</option>`;
+  }).join("");
+  return selectWrap("email_hour", options);
+}
+
+function timezoneSelect(selected: string): string {
+  const zones = timeZoneOptions(selected);
+  const byRegion = new Map<string, typeof zones>();
+  for (const z of zones) {
+    const list = byRegion.get(z.region) ?? [];
+    list.push(z);
+    byRegion.set(z.region, list);
+  }
+  const options = timeZoneRegions(zones).map(region => {
+    const inner = (byRegion.get(region) ?? []).map(z => {
+      const sel = z.id === selected ? " selected" : "";
+      return `<option value="${escapeHtml(z.id)}"${sel}>${escapeHtml(z.label)}</option>`;
+    }).join("");
+    return `<optgroup label="${escapeHtml(region)}">${inner}</optgroup>`;
+  }).join("");
+  return selectWrap("timezone", options);
+}
 
 export async function settingsPage(env: Env): Promise<Response> {
   const s = await getSettings(env.DB);
@@ -18,8 +52,8 @@ export async function settingsPage(env: Env): Promise<Response> {
   </div>
   <h6 class="kicker">Reminder</h6>
   <div class="form-grid">
-    <div class="field"><label for="email_hour">Hour (0–23, local)</label><input class="input" type="text" id="email_hour" value="${s.email_hour}"></div>
-    <div class="field"><label for="timezone">Timezone</label><input class="input" type="text" id="timezone" value="${escapeHtml(s.timezone)}"></div>
+    <div class="field"><label for="email_hour">Hour</label>${hourSelect(s.email_hour)}</div>
+    <div class="field"><label for="timezone">Timezone</label>${timezoneSelect(s.timezone)}</div>
   </div>
   <div class="form-grid">
     <div class="field"><label for="email_to">Email to</label><input class="input" type="email" id="email_to" value="${escapeHtml(s.email_to)}" placeholder="you@example.com" autocomplete="email"></div>

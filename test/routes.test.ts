@@ -434,6 +434,12 @@ describe("browse, prompt edit, settings", () => {
     expect(html).toContain("25");
     expect(html).toContain("me@example.com");
     expect(html).toContain("https://sr.example");
+    expect(html).toContain('<select class="input" id="email_hour">');
+    expect(html).toContain('<option value="8" selected>8:00 AM</option>');
+    expect(html).toContain('<select class="input" id="timezone">');
+    expect(html).toMatch(/<option value="America\/New_York" selected>/);
+    expect(html).not.toMatch(/<input[^>]*id="email_hour"/);
+    expect(html).not.toMatch(/<input[^>]*id="timezone"/);
     expect((await POST("/api/settings", { session_cap: 0, desired_retention: 0.9, email_hour: 7, timezone: "America/New_York" })).status).toBe(400);
     expect((await POST("/api/settings", { session_cap: 20, desired_retention: 0.5, email_hour: 7, timezone: "America/New_York" })).status).toBe(400);
     expect((await POST("/api/settings", { session_cap: 20, desired_retention: 0.9, email_hour: 7, timezone: "Not/AZone" })).status).toBe(400);

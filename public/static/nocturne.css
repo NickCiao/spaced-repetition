@@ -2,6 +2,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
+  color-scheme: dark;
   --color-bg: #161826;
   --color-surface: #232532;
   --color-text: #e9e9ed;
@@ -176,6 +177,16 @@ figcaption {
 .input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
 .input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
 textarea.input { min-height: 90px; resize: vertical; }
+select.input {
+  appearance: none; -webkit-appearance: none;
+  cursor: pointer; padding-right: 32px;
+}
+.select-wrap { position: relative; }
+.select-wrap > .ph {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  pointer-events: none; font-size: 14px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
 .radio { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
 .radio input, .seg-opt input {
   position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;
