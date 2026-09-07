@@ -103,12 +103,15 @@ export async function browseTopic(topicId: string, env: Env): Promise<Response> 
   const prompts = (await env.DB.prepare(
     "SELECT * FROM prompts WHERE topic_id = ? ORDER BY position").bind(topicId).all<PromptRow>()).results;
   const active = prompts.filter(p => !p.retired).length;
-  const list = prompts.map(p => `
+  const list = prompts.map(p => {
+    const q = p.question.length > 120 ? p.question.slice(0, 120) + "…" : p.question;
+    return `
     <div class="row${p.retired ? " retired" : ""}">
-      <div class="row-main"><div class="row-text"><a href="/prompt/${p.id}">${escapeHtml(p.question.slice(0, 120))}</a></div></div>
+      <div class="row-main"><div class="row-text"><a href="/prompt/${p.id}">${escapeHtml(q)}</a></div></div>
       ${p.flag_note ? '<span class="tag tag-outline">flagged</span>' : ""}
       ${p.retired ? '<span class="tag tag-neutral">retired</span>' : ""}
-    </div>`).join("") ||
+    </div>`;
+  }).join("") ||
     `<p class='empty'>No prompts yet — add your first with <a href="/prompt/new?topic=${topic.id}">+ Prompt</a>.</p>`;
   const urlLine = topic.url && /^https?:\/\//i.test(topic.url)
     ? `<p class="topic-url"><a href="${escapeHtml(topic.url)}" target="_blank" rel="noopener">${escapeHtml(hostOnly(topic.url))}</a></p>`

@@ -424,6 +424,15 @@ describe("browse, prompt edit, settings", () => {
     expect(html).toContain("No prompts yet");
   });
 
+  it("browse topic list truncates long questions with an ellipsis", async () => {
+    const { id: tid } = await (await POST("/api/topic", { name: "Long Q Topic" })).json() as { id: string };
+    const question = "Q".repeat(130);
+    await POST("/api/prompt", { topic_id: tid, kind: "qa", question, answer: "a" });
+    const html = await (await exports.default.fetch(`http://sr/browse/${tid}`, AUTH)).text();
+    expect(html).toContain("Q".repeat(120) + "…");
+    expect(html).not.toContain(question);
+  });
+
   it("settings round-trip and validation", async () => {
     const ok = await POST("/api/settings", {
       session_cap: 25, desired_retention: 0.85, email_hour: 8, timezone: "America/New_York",
