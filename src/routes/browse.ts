@@ -116,6 +116,7 @@ export async function browseTopic(topicId: string, env: Env): Promise<Response> 
   const urlLine = topic.url && /^https?:\/\//i.test(topic.url)
     ? `<p class="topic-url"><a href="${escapeHtml(topic.url)}" target="_blank" rel="noopener">${escapeHtml(hostOnly(topic.url))}</a></p>`
     : "";
+  const total = prompts.length;
   const body = `
 <a class="crumb" href="/browse"><i class="ph ph-arrow-left"></i> Browse</a>
 <h1 class="page-title topic-title">${escapeHtml(topic.name)}</h1>
@@ -126,7 +127,26 @@ ${urlLine}
   <a class="btn btn-secondary" href="/prompt/new?topic=${topic.id}"><i class="ph ph-plus"></i> Prompt</a>
 </div>
 <h6 class="kicker">Prompts <span class="count">${active}</span></h6>
-<div class="rows">${list}</div>`;
+<div class="rows">${list}</div>
+<div class="danger">
+  <button type="button" class="btn btn-secondary" id="delete-topic">Delete permanently</button>
+  <p class="danger-note">Removes this topic${total ? `, its ${total} prompt${total === 1 ? "" : "s"},` : ""} and all review history. Cannot be undone.</p>
+  <p class="flash" id="delete-flash"></p>
+</div>
+<script>
+const TOPIC = ${jsonForScript({ id: topic.id, name: topic.name, count: total })};
+document.getElementById("delete-topic").onclick = async () => {
+  const msg = TOPIC.count
+    ? "Delete topic \\u201C" + TOPIC.name + "\\u201D and its " + TOPIC.count +
+      " prompt" + (TOPIC.count === 1 ? "" : "s") +
+      " permanently? Review history will be gone and this cannot be undone."
+    : "Delete topic \\u201C" + TOPIC.name + "\\u201D permanently? This cannot be undone.";
+  if (!confirm(msg)) return;
+  const res = await fetch("/api/topic/" + TOPIC.id + "/delete", { method: "POST" });
+  if (res.ok) location.href = "/browse";
+  else document.getElementById("delete-flash").textContent = (await res.json()).error ?? "Delete failed";
+};
+</script>`;
   return page(topic.name, body, { shell });
 }
 
@@ -272,5 +292,20 @@ export async function deletePrompt(id: string, env: Env): Promise<Response> {
   if (!p) return Response.json({ error: "unknown prompt" }, { status: 404 });
   await env.DB.prepare("DELETE FROM events WHERE prompt_id = ?").bind(id).run();
   await env.DB.prepare("DELETE FROM prompts WHERE id = ?").bind(id).run();
+  return Response.json({ ok: true, ...(await navCounts(env.DB)) });
+}
+
+/** Cascade hard-delete: events → prompts → topic. Captures keep their free-text topic hint. */
+export async function deleteTopic(id: string, env: Env): Promise<Response> {
+  if (!/^[a-z0-9]{10}$/.test(id)) return new Response("not found", { status: 404 });
+  const topic = await env.DB.prepare("SELECT id FROM topics WHERE id = ?").bind(id).first();
+  if (!topic) return Response.json({ error: "unknown topic" }, { status: 404 });
+  await env.DB.batch([
+    env.DB.prepare(
+      "DELETE FROM events WHERE prompt_id IN (SELECT id FROM prompts WHERE topic_id = ?)"
+    ).bind(id),
+    env.DB.prepare("DELETE FROM prompts WHERE topic_id = ?").bind(id),
+    env.DB.prepare("DELETE FROM topics WHERE id = ?").bind(id),
+  ]);
   return Response.json({ ok: true, ...(await navCounts(env.DB)) });
 }

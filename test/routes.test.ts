@@ -422,6 +422,39 @@ describe("browse, prompt edit, settings", () => {
     const html = await (await exports.default.fetch(`http://sr/browse/${id}`, AUTH)).text();
     expect(html).toContain(`/prompt/new?topic=${id}`);
     expect(html).toContain("No prompts yet");
+    expect(html).toContain("delete-topic");
+    expect(html).toContain("/api/topic/" + id + "/delete");
+  });
+
+  it("POST /api/topic/:id/delete cascades prompts and events", async () => {
+    const { id: tid } = await (await POST("/api/topic", { name: "Cascade Delete" })).json() as { id: string };
+    const { id: pid } = await (await POST("/api/prompt", {
+      topic_id: tid, kind: "qa", question: "gone?", answer: "yes"
+    })).json() as { id: string };
+    await POST("/api/grade", { prompt_id: pid, action: "remembered" });
+    // Capture with matching name hint must survive (not an FK).
+    await POST("/api/capture", { text: "keep me", topic: "Cascade Delete" });
+
+    expect((await POST(`/api/topic/${tid}/delete`, {})).status).toBe(200);
+    expect(await env.DB.prepare("SELECT id FROM topics WHERE id = ?").bind(tid).first()).toBeNull();
+    expect(await env.DB.prepare("SELECT id FROM prompts WHERE id = ?").bind(pid).first()).toBeNull();
+    const ev = await env.DB.prepare("SELECT COUNT(*) AS n FROM events WHERE prompt_id = ?").bind(pid).first<{ n: number }>();
+    expect(ev?.n).toBe(0);
+    const cap = await env.DB.prepare("SELECT COUNT(*) AS n FROM captures WHERE topic = ?")
+      .bind("Cascade Delete").first<{ n: number }>();
+    expect(cap?.n).toBe(1);
+
+    expect((await POST("/api/topic/nopexxxxxx/delete", {})).status).toBe(404);
+    expect((await POST("/api/topic/not-an-id/delete", {})).status).toBe(404);
+  });
+
+  it("topic page danger note reflects prompt count", async () => {
+    const { id: tid } = await (await POST("/api/topic", { name: "Counted Topic" })).json() as { id: string };
+    await POST("/api/prompt", { topic_id: tid, kind: "qa", question: "one?", answer: "a" });
+    await POST("/api/prompt", { topic_id: tid, kind: "qa", question: "two?", answer: "b" });
+    const html = await (await exports.default.fetch(`http://sr/browse/${tid}`, AUTH)).text();
+    expect(html).toContain("its 2 prompts");
+    expect(html).toContain('"count":2');
   });
 
   it("browse topic list truncates long questions with an ellipsis", async () => {

@@ -5,7 +5,7 @@ import { gradeApi, reviewPage } from "./routes/review";
 import { captureApi, capturePage, capturesToday, topicsApi } from "./routes/capture";
 import { serveAsset, uploadAsset } from "./routes/assets";
 import { deleteCapture, inboxPage, previewApi, refineApi, refinePage } from "./routes/inbox";
-import { browseIndex, browseTopic, deletePrompt, promptApi, promptForm, topicApi } from "./routes/browse";
+import { browseIndex, browseTopic, deletePrompt, deleteTopic, promptApi, promptForm, topicApi } from "./routes/browse";
 import { settingsApi, settingsPage } from "./routes/settings";
 import { emailLoginLink, loginPage, verifyLogin } from "./routes/auth";
 import { exportZip, importForeign, importZip } from "./routes/transfer";
@@ -61,6 +61,8 @@ export default {
     if (url.pathname === "/api/preview" && request.method === "POST") return previewApi(request);
     if (url.pathname === "/browse" && request.method === "GET") return browseIndex(env);
     if (url.pathname === "/api/topic" && request.method === "POST") return topicApi(request, env);
+    const topicDelMatch = url.pathname.match(/^\/api\/topic\/([a-z0-9]{10})\/delete$/);
+    if (topicDelMatch && request.method === "POST") return deleteTopic(topicDelMatch[1], env);
     const topicMatch = url.pathname.match(/^\/browse\/([a-z0-9]{10})$/);
     if (topicMatch && request.method === "GET") return browseTopic(topicMatch[1], env);
     const pMatch = url.pathname.match(/^\/prompt\/(new|[a-z0-9]{10})$/);
