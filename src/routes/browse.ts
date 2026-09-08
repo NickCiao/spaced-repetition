@@ -169,12 +169,17 @@ ${flagCard}
     <button type="button" class="seg-opt${p?.kind === "cloze" ? " checked" : ""}" data-kind="cloze" role="tab" aria-selected="${p?.kind === "cloze" ? "true" : "false"}">Cloze</button>
   </div>
   <div class="field">
-    <label for="q">Question</label>
+    <label for="q">Question <span class="note cloze-hint" hidden>— wrap deletions in {{…}}</span></label>
     <textarea class="input" id="q">${escapeHtml(p?.question ?? "")}</textarea>
   </div>
   <div class="field" id="answer-field">
     <label for="a">Answer</label>
     <textarea class="input" id="a">${escapeHtml(p?.answer ?? "")}</textarea>
+  </div>
+  <div class="prompt-editor-foot">
+    <div class="prompt-editor-foot-start">
+      <button type="button" class="btn btn-ghost cloze-hide" id="cloze-hide" hidden><i class="ph ph-brackets-curly"></i> Hide selection</button>
+    </div>
   </div>
   <div class="field">
     <label for="psource">Source <span class="note">— optional; where this came from, markdown links work</span></label>
@@ -198,9 +203,17 @@ function setKind(k) {
     b.classList.toggle("checked", on);
     b.setAttribute("aria-selected", on ? "true" : "false");
   });
-  document.getElementById("answer-field").style.display = k === "cloze" ? "none" : "";
+  const cloze = k === "cloze";
+  document.getElementById("answer-field").style.display = cloze ? "none" : "";
+  const hint = document.querySelector(".cloze-hint");
+  if (hint) hint.hidden = !cloze;
+  const hideBtn = document.getElementById("cloze-hide");
+  if (hideBtn) hideBtn.hidden = !cloze;
+  const q = document.getElementById("q");
+  if (q) q.placeholder = cloze ? (window.CLOZE_PLACEHOLDER || "") : "";
 }
 document.querySelectorAll(".seg-opt").forEach(b => b.onclick = () => setKind(b.dataset.kind));
+document.getElementById("cloze-hide").onclick = () => window.wrapClozeSelection(document.getElementById("q"));
 setKind(document.getElementById("kind").value);
 async function submitPrompt(e) {
   e.preventDefault();
@@ -228,7 +241,7 @@ document.getElementById("delete-prompt").onclick = async () => {
   else document.getElementById("flash").textContent = (await res.json()).error ?? "Delete failed";
 };` : ""}
 </script>`;
-  return page(p ? "Edit prompt" : "New prompt", body, { shell });
+  return page(p ? "Edit prompt" : "New prompt", body, { script: "/static/cloze-edit.js", shell });
 }
 
 type PromptBody = {

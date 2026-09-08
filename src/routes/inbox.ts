@@ -72,7 +72,7 @@ export async function refinePage(captureId: string, env: Env): Promise<Response>
   data-capture="${cap.id}"
   data-topic-name="${escapeHtml(topicGuess)}"
   data-source="${escapeHtml(sourceGuess)}"></div>`;
-  return page("Refine", body, { script: ["/static/topic-picker.js", "/static/refine.js"], shell });
+  return page("Refine", body, { script: ["/static/topic-picker.js", "/static/cloze-edit.js", "/static/refine.js"], shell });
 }
 
 type RefineBody = {

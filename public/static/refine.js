@@ -14,7 +14,7 @@
     <button type="button" class="seg-opt" data-kind="cloze" role="tab" aria-selected="false">Cloze</button>
   </div>
   <div class="field">
-    <label>Question</label>
+    <label>Question <span class="note cloze-hint" hidden>— wrap deletions in {{…}}</span></label>
     <textarea class="input q"></textarea>
   </div>
   <div class="field a-field">
@@ -22,7 +22,10 @@
     <textarea class="input a"></textarea>
   </div>
   <div class="prompt-editor-foot">
-    <label class="btn btn-ghost"><i class="ph ph-image"></i> Attach image<input type="file" class="img" accept="image/*" hidden></label>
+    <div class="prompt-editor-foot-start">
+      <button type="button" class="btn btn-ghost cloze-hide" hidden><i class="ph ph-brackets-curly"></i> Hide selection</button>
+      <label class="btn btn-ghost"><i class="ph ph-image"></i> Attach image<input type="file" class="img" accept="image/*" hidden></label>
+    </div>
     <button type="button" class="btn btn-ghost preview-toggle">Preview</button>
   </div>
   <div class="preview"></div>
@@ -61,8 +64,15 @@
       b.classList.toggle("checked", on);
       b.setAttribute("aria-selected", on ? "true" : "false");
     });
+    const cloze = kind === "cloze";
     const aField = card.querySelector(".a-field");
-    if (aField) aField.style.display = kind === "cloze" ? "none" : "";
+    if (aField) aField.style.display = cloze ? "none" : "";
+    const hint = card.querySelector(".cloze-hint");
+    if (hint) hint.hidden = !cloze;
+    const hideBtn = card.querySelector(".cloze-hide");
+    if (hideBtn) hideBtn.hidden = !cloze;
+    const q = card.querySelector(".q");
+    if (q) q.placeholder = cloze ? (window.CLOZE_PLACEHOLDER || "") : "";
   }
 
   let picker;
@@ -100,6 +110,12 @@
       if (seg) {
         const card = seg.closest(".card");
         setKind(card, seg.dataset.kind);
+        return;
+      }
+      const hide = e.target.closest(".cloze-hide");
+      if (hide) {
+        const card = hide.closest(".card");
+        window.wrapClozeSelection(card.querySelector(".q"));
         return;
       }
       if (!e.target.classList.contains("preview-toggle")) return;

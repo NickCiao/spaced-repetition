@@ -173,7 +173,9 @@ button.seg-opt { background: none; border: 0; color: inherit; font: inherit; }
 
 /* ── prompt editor card (refine) ───────────────────────────────────── */
 .prompt-editor { gap: var(--space-3); }
-.prompt-editor-foot { display: flex; justify-content: space-between; align-items: center; }
+.prompt-editor-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.prompt-editor-foot-start { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+label .cloze-hint.note { font-weight: 400; }
 
 /* ── topic picker ──────────────────────────────────────────────────── */
 .topic-picker { position: relative; }
