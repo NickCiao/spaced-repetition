@@ -150,6 +150,8 @@ textarea.input.capture-box { min-height: 148px; font-size: 16px; }
 .attach-row { display: flex; align-items: flex-end; gap: var(--space-3); }
 .attach-row .field { flex: 1; }
 .attach-row .btn input, .prompt-editor-foot .btn input, .file-row .btn input { display: none; }
+/* .btn sets display:inline-flex, which otherwise wins over the UA [hidden] rule */
+.cloze-hide[hidden], .cloze-hint[hidden] { display: none !important; }
 
 /* segmented control on buttons (server pages wire the JS) */
 button.seg-opt { background: none; border: 0; color: inherit; font: inherit; }
