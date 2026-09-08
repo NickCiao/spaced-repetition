@@ -56,8 +56,9 @@ Restore is upgrade-on-restore: a legacy zip imports cleanly and the next export 
 - **Capture** — "Topic (optional)" picker → `captures.topic` as plain text (works offline/queued; no topic row is created until refine).
 - **Refine** — topic picker preselected from `cap.topic` (legacy captures fall back to `cap.title`, which used to hold the typed grouping); a single "Source (optional)" input prefilled as `[title](url)` when the capture has a URL. Every prompt saved from one refine shares that source — one capture, one provenance.
 - **Prompt editor** — same optional Source input; blank clears it.
+- **Browse topic** — danger zone **Delete permanently** cascade-hard-deletes the topic, all of its prompts (including retired), and their review events. Pending captures keep their free-text topic name hint.
 - **Migrate in** (Anki/Mochi) — decks map to topics; the headerless-Anki fallback param is `?topic=` (see `2026-08-22-anki-mochi-import.md`).
 
 ## API surface (renames)
 
-`/api/topics` (GET, picker list) · `/api/topic` (POST, create/dedupe) · refine body `{ topic: {id} | {name}, source?, prompts }` · `/api/prompt` takes `topic_id` + `source` · review scope `/?topic=<id>` · foreign import `?topic=`. Session cards carry `topicName` and server-rendered `sourceHtml`.
+`/api/topics` (GET, picker list) · `/api/topic` (POST, create/dedupe) · `POST /api/topic/:id/delete` (cascade hard-delete) · refine body `{ topic: {id} | {name}, source?, prompts }` · `/api/prompt` takes `topic_id` + `source` · review scope `/?topic=<id>` · foreign import `?topic=`. Session cards carry `topicName` and server-rendered `sourceHtml`.
