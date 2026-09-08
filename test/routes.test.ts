@@ -423,7 +423,7 @@ describe("browse, prompt edit, settings", () => {
     expect(html).toContain(`/prompt/new?topic=${id}`);
     expect(html).toContain("No prompts yet");
     expect(html).toContain("delete-topic");
-    expect(html).toContain("/api/topic/" + id + "/delete");
+    expect(html).toContain('"/api/topic/" + TOPIC.id + "/delete"');
   });
 
   it("POST /api/topic/:id/delete cascades prompts and events", async () => {
