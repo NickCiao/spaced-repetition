@@ -1,0 +1,16 @@
+{
+	"name": "spaced-repetition",
+	"install": "npm install && { [ -f .dev.vars ] || cp .dev.vars.example .dev.vars; } && sed -i 's/^SR_TOKEN=$/SR_TOKEN=devtoken/' .dev.vars && npm run migrate:local",
+	"terminals": [
+		{
+			"name": "dev",
+			"command": "npm run dev"
+		}
+	],
+	"ports": [
+		{
+			"name": "worker",
+			"port": 8787
+		}
+	]
+}
