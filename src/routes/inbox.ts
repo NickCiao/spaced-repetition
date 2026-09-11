@@ -2,7 +2,8 @@ import type { Env } from "../env.d";
 import { getSettings, insertPromptStmt, insertTopic, newId, nowIso, type CaptureRow, type PromptRow, type TopicRow } from "../db";
 import { normalizePromptInput, normalizeSourceInput, validatePromptInput, validateSourceInput } from "../format";
 import { newCardFields } from "../scheduler";
-import { renderPromptAnswer, renderPromptQuestion } from "../markdown";
+import { renderPromptAnswer, renderPromptQuestion, renderSourceLine } from "../markdown";
+import { promptHints } from "../hints";
 import { captureCardMeta, captureRowMeta, escapeHtml, hostOnly, page, shellFor } from "../html";
 
 export async function inboxPage(env: Env): Promise<Response> {
@@ -72,7 +73,10 @@ export async function refinePage(captureId: string, env: Env): Promise<Response>
   data-capture="${cap.id}"
   data-topic-name="${escapeHtml(topicGuess)}"
   data-source="${escapeHtml(sourceGuess)}"></div>`;
-  return page("Refine", body, { script: ["/static/topic-picker.js", "/static/cloze-edit.js", "/static/refine.js"], shell });
+  return page("Refine", body, {
+    script: ["/static/topic-picker.js", "/static/cloze-edit.js", "/static/session-card.js", "/static/prompt-preview.js", "/static/refine.js"],
+    shell
+  });
 }
 
 type RefineBody = {
@@ -152,11 +156,22 @@ export async function deleteCapture(id: string, env: Env): Promise<Response> {
   return Response.json({ ok: true });
 }
 
+/**
+ * Renders a prompt exactly as review will (same functions, same sanitizer)
+ * plus authoring hints, so the editors can show a faithful live preview.
+ */
 export async function previewApi(request: Request): Promise<Response> {
-  const b = await request.json<{ kind: "qa" | "cloze"; question: string; answer: string }>().catch(() => null);
+  const b = await request.json<{ kind?: "qa" | "cloze"; question?: string; answer?: string; source?: string }>()
+    .catch(() => null);
   if (!b) return Response.json({ error: "bad body" }, { status: 400 });
+  const kind = b.kind === "cloze" ? "cloze" : "qa";
+  const question = typeof b.question === "string" ? b.question : "";
+  const answer = typeof b.answer === "string" ? b.answer : "";
+  const source = typeof b.source === "string" ? b.source.trim() : "";
   return Response.json({
-    questionHtml: renderPromptQuestion(b.kind, b.question ?? ""),
-    answerHtml: renderPromptAnswer(b.kind, b.question ?? "", b.answer ?? "")
+    questionHtml: renderPromptQuestion(kind, question),
+    answerHtml: renderPromptAnswer(kind, question, answer),
+    sourceHtml: source ? renderSourceLine(source) : "",
+    hints: promptHints(kind, question, answer)
   });
 }

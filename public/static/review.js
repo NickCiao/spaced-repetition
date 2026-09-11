@@ -140,22 +140,10 @@
     }).join("");
   }
 
-  function attribution(c) {
-    // sourceHtml is rendered server-side through the sanitizing markdown pipeline.
-    const src = c.sourceHtml ? `<div class="session-source">from ${c.sourceHtml}</div>` : "";
-    const topic = c.topicName ? `<div class="session-topic">${esc(c.topicName)}</div>` : "";
-    return src || topic ? `<div class="session-meta">${src}${topic}</div>` : "";
-  }
-
   function render() {
     const c = session.cards[i];
-    const cardBody = !revealed
-      ? `<div class="session-question">${c.questionHtml}</div>`
-      : c.kind === "cloze"
-        ? `<div class="session-answer">${c.answerHtml}</div>${attribution(c)}`
-        : `<div class="session-question dimmed">${c.questionHtml}</div>
-           <div class="session-divider"></div>
-           <div class="session-answer">${c.answerHtml}</div>${attribution(c)}`;
+    // Shared with the editors' preview (session-card.js) so authoring and review match.
+    const cardBody = window.sessionCardBody(c, revealed);
 
     const flagPanel = flagging ? `
       <div class="flag-panel card elev-md">

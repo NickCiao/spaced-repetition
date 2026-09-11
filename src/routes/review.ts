@@ -22,7 +22,7 @@ export async function reviewPage(request: Request, env: Env): Promise<Response> 
 <script type="application/json" id="session">${jsonForScript(sessionPayload)}</script>`;
 
   return page("Review", body, {
-    script: "/static/review.js",
+    script: ["/static/session-card.js", "/static/review.js"],
     shell
   });
 }

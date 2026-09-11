@@ -201,10 +201,16 @@ export async function promptForm(idOrNew: string, request: Request, env: Env): P
 <a class="crumb" href="/browse/${escapeHtml(topicId)}"><i class="ph ph-arrow-left"></i> ${escapeHtml(topicName)}</a>
 <h1 class="page-title">${p ? "Edit prompt" : "New prompt"}</h1>
 ${flagCard}
-<form class="form" method="post" action="/api/prompt" onsubmit="return submitPrompt(event)">
+<div class="editor-layout" id="prompt-editor" data-topic-id="${escapeHtml(topicId)}" data-topic-name="${escapeHtml(topicName)}">
+<form class="form" id="prompt-form" method="post" action="/api/prompt">
   <input type="hidden" id="pid" value="${escapeHtml(p?.id ?? "")}">
-  <input type="hidden" id="tid" value="${escapeHtml(topicId)}">
   <input type="hidden" id="kind" value="${p?.kind === "cloze" ? "cloze" : "qa"}">
+  <div class="field">
+    <label for="topic">Topic${p ? ` <span class="note">— pick another to move this prompt; scheduling is kept</span>` : ""}</label>
+    <div class="topic-picker" id="topic-picker">
+      <input class="input" type="text" id="topic" value="${escapeHtml(topicName)}" placeholder="Existing or new topic" autocomplete="off">
+    </div>
+  </div>
   <div class="seg" role="tablist" aria-label="Prompt kind">
     <button type="button" class="seg-opt${p?.kind !== "cloze" ? " checked" : ""}" data-kind="qa" role="tab" aria-selected="${p?.kind !== "cloze" ? "true" : "false"}">Q / A</button>
     <button type="button" class="seg-opt${p?.kind === "cloze" ? " checked" : ""}" data-kind="cloze" role="tab" aria-selected="${p?.kind === "cloze" ? "true" : "false"}">Cloze</button>
@@ -228,61 +234,24 @@ ${flagCard}
   </div>
   <label class="check"><input type="checkbox" id="retired"${p?.retired ? " checked" : ""}> Retired <span class="note">hidden from review; recoverable</span></label>
   <div class="form-actions">
-    <button type="submit" class="btn btn-primary">Save</button>
+    <button type="submit" class="btn btn-primary" id="save">Save</button>
   </div>
   <p class="flash" id="flash"></p>
 </form>
+<div id="preview"></div>
+</div>
 ${p ? `<div class="danger">
   <button type="button" class="btn btn-secondary" id="delete-prompt">Delete permanently</button>
   <p class="danger-note">Removes this prompt and its review history. Cannot be undone.</p>
-</div>` : ""}
-<script>
-function setKind(k) {
-  document.getElementById("kind").value = k;
-  document.querySelectorAll(".seg-opt").forEach(b => {
-    const on = b.dataset.kind === k;
-    b.classList.toggle("checked", on);
-    b.setAttribute("aria-selected", on ? "true" : "false");
+</div>` : ""}`;
+  return page(p ? "Edit prompt" : "New prompt", body, {
+    script: [
+      "/static/topic-picker.js", "/static/cloze-edit.js", "/static/session-card.js",
+      "/static/prompt-preview.js", "/static/prompt-edit.js"
+    ],
+    bodyClass: "wide",
+    shell
   });
-  const cloze = k === "cloze";
-  document.getElementById("answer-field").style.display = cloze ? "none" : "";
-  const hint = document.querySelector(".cloze-hint");
-  if (hint) hint.hidden = !cloze;
-  const hideBtn = document.getElementById("cloze-hide");
-  if (hideBtn) hideBtn.hidden = !cloze;
-  const q = document.getElementById("q");
-  if (q) q.placeholder = cloze ? (window.CLOZE_PLACEHOLDER || "") : "";
-}
-document.querySelectorAll(".seg-opt").forEach(b => b.onclick = () => setKind(b.dataset.kind));
-document.getElementById("cloze-hide").onclick = () => window.wrapClozeSelection(document.getElementById("q"));
-setKind(document.getElementById("kind").value);
-async function submitPrompt(e) {
-  e.preventDefault();
-  const body = {
-    id: document.getElementById("pid").value || undefined,
-    topic_id: document.getElementById("tid").value,
-    kind: document.getElementById("kind").value,
-    question: document.getElementById("q").value,
-    answer: document.getElementById("a").value,
-    source: document.getElementById("psource").value,
-    retired: document.getElementById("retired").checked,
-    clear_flag: true
-  };
-  const res = await fetch("/api/prompt", { method: "POST",
-    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (res.ok) location.href = "/browse/" + body.topic_id;
-  else document.getElementById("flash").textContent = (await res.json()).error;
-  return false;
-}
-${p ? `
-document.getElementById("delete-prompt").onclick = async () => {
-  if (!confirm("Delete this prompt permanently? Its review history will be gone and this cannot be undone.")) return;
-  const res = await fetch("/api/prompt/${p.id}/delete", { method: "POST" });
-  if (res.ok) location.href = "/browse/${p.topic_id}";
-  else document.getElementById("flash").textContent = (await res.json()).error ?? "Delete failed";
-};` : ""}
-</script>`;
-  return page(p ? "Edit prompt" : "New prompt", body, { script: "/static/cloze-edit.js", shell });
 }
 
 type PromptBody = {
@@ -299,25 +268,36 @@ export async function promptApi(request: Request, env: Env): Promise<Response> {
   if (badSource) return Response.json({ error: badSource }, { status: 400 });
   const source = normalizeSourceInput(b.source);
 
+  const topic = await env.DB.prepare("SELECT id FROM topics WHERE id = ?").bind(b.topic_id).first<TopicRow>();
+  if (!topic) return Response.json({ error: "unknown topic" }, { status: 400 });
+
   const ts = nowIso();
   const { question, answer } = normalizePromptInput(b);
+  const nextPosition = async () => {
+    const row = await env.DB.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM prompts WHERE topic_id = ?")
+      .bind(b.topic_id).first<{ p: number }>();
+    return row?.p ?? 0;
+  };
   if (b.id) {
-    const existing = await env.DB.prepare("SELECT id FROM prompts WHERE id = ?").bind(b.id).first();
+    const existing = await env.DB.prepare("SELECT id, topic_id, position FROM prompts WHERE id = ?")
+      .bind(b.id).first<Pick<PromptRow, "id" | "topic_id" | "position">>();
     if (!existing) return Response.json({ error: "unknown prompt" }, { status: 404 });
+    // Moving to another topic appends the prompt there; only content and
+    // placement change — FSRS fields and the event log stay untouched.
+    const moved = existing.topic_id !== b.topic_id;
+    const position = moved ? await nextPosition() : existing.position;
     await env.DB.prepare(
-      `UPDATE prompts SET kind=?, question=?, answer=?, source=?, retired=?, updated_at=?
+      `UPDATE prompts SET topic_id=?, position=?, kind=?, question=?, answer=?, source=?, retired=?, updated_at=?
         ${b.clear_flag ? ", flag_note=NULL" : ""} WHERE id=?`
-    ).bind(b.kind, question, answer, source, b.retired ? 1 : 0, ts, b.id).run();
-    return Response.json({ ok: true, id: b.id });
+    ).bind(b.topic_id, position, b.kind, question, answer, source, b.retired ? 1 : 0, ts, b.id).run();
+    return Response.json({ ok: true, id: b.id, topic_id: b.topic_id });
   }
   const id = newId();
-  const posRow = await env.DB.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM prompts WHERE topic_id = ?")
-    .bind(b.topic_id).first<{ p: number }>();
   await insertPromptStmt(env.DB, {
     id, topic_id: b.topic_id, kind: b.kind!, question, answer, source,
-    position: posRow?.p ?? 0, created_at: ts, updated_at: ts
+    position: await nextPosition(), created_at: ts, updated_at: ts
   }, newCardFields(new Date())).run();
-  return Response.json({ ok: true, id });
+  return Response.json({ ok: true, id, topic_id: b.topic_id });
 }
 
 export async function deletePrompt(id: string, env: Env): Promise<Response> {

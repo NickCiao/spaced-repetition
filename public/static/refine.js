@@ -26,11 +26,21 @@
       <button type="button" class="btn btn-ghost cloze-hide" hidden><i class="ph ph-brackets-curly"></i> Hide selection</button>
       <label class="btn btn-ghost"><i class="ph ph-image"></i> Attach image<input type="file" class="img" accept="image/*" hidden></label>
     </div>
-    <button type="button" class="btn btn-ghost preview-toggle">Preview</button>
   </div>
-  <div class="preview"></div>
+  <div class="preview-host"></div>
 </div>`;
   }
+
+  // One live preview per card (prompt-preview.js), closed until its Preview
+  // button is pressed so multi-card refines stay short on the phone.
+  function initCard(card) {
+    card._preview = window.promptPreview(card.querySelector(".preview-host"), {
+      collapsible: true,
+      getState: () => ({ ...collect(card), source: document.getElementById("psource").value }),
+      inputs: [card.querySelector(".q"), card.querySelector(".a")]
+    });
+  }
+  const refreshPreview = (card) => card && card._preview && card._preview.refresh();
 
   async function downscale(file) {
     const bmp = await createImageBitmap(file);
@@ -53,6 +63,7 @@
     try {
       const id = await uploadImage(file);
       target.value += `\n![](assets/${id})\n`;
+      refreshPreview(target.closest(".card"));
     } catch {
       document.getElementById("flash").textContent = "Image upload failed.";
     }
@@ -102,30 +113,29 @@
 
     picker = window.topicPicker(document.getElementById("topic-picker"));
     picker.resolveInitial(); // a guessed name that matches an existing topic picks it up, canonical casing included
-    document.getElementById("add").onclick = () =>
-      document.getElementById("forms").insertAdjacentHTML("beforeend", promptForm());
+    document.querySelectorAll("#forms .card").forEach(initCard);
+    document.getElementById("add").onclick = () => {
+      const forms = document.getElementById("forms");
+      forms.insertAdjacentHTML("beforeend", promptForm());
+      initCard(forms.lastElementChild);
+    };
     document.getElementById("save").onclick = save;
-    root.addEventListener("click", async (e) => {
+    document.getElementById("psource").addEventListener("input", () =>
+      document.querySelectorAll("#forms .card").forEach(refreshPreview));
+    root.addEventListener("click", (e) => {
       const seg = e.target.closest(".seg-opt");
       if (seg) {
         const card = seg.closest(".card");
         setKind(card, seg.dataset.kind);
+        refreshPreview(card);
         return;
       }
       const hide = e.target.closest(".cloze-hide");
       if (hide) {
         const card = hide.closest(".card");
         window.wrapClozeSelection(card.querySelector(".q"));
-        return;
+        refreshPreview(card);
       }
-      if (!e.target.classList.contains("preview-toggle")) return;
-      const card = e.target.closest(".card");
-      const body = collect(card);
-      const res = await fetch("/api/preview", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
-      });
-      const { questionHtml, answerHtml } = await res.json();
-      card.querySelector(".preview").innerHTML = `<hr>${questionHtml}<hr>${answerHtml}`;
     });
     root.addEventListener("change", async (e) => {
       if (e.target.classList.contains("img")) {

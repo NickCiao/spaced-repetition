@@ -43,7 +43,7 @@ Restore is upgrade-on-restore: a legacy zip imports cleanly and the next export 
 
 ## Topic picker (replaces the datalist)
 
-`GET /api/topics` returns every topic ordered by most-recently-used (`COALESCE(MAX(prompts.updated_at), topics.created_at)` descending) with prompt counts. The picker (`public/static/topic-picker.js`, shared by Capture and Refine) fetches once and filters client-side:
+`GET /api/topics` returns every topic ordered by most-recently-used (`COALESCE(MAX(prompts.updated_at), topics.created_at)` descending) with prompt counts. The picker (`public/static/topic-picker.js`, shared by Capture, Refine, and the prompt editor) fetches once and filters client-side:
 
 - opens on focus showing the MRU list — existing topics are visible before typing
 - case-insensitive substring filter; arrow keys + Enter, Escape, tap; ARIA combobox
@@ -55,7 +55,7 @@ Restore is upgrade-on-restore: a legacy zip imports cleanly and the next export 
 
 - **Capture** — "Topic (optional)" picker → `captures.topic` as plain text (works offline/queued; no topic row is created until refine).
 - **Refine** — topic picker preselected from `cap.topic` (legacy captures fall back to `cap.title`, which used to hold the typed grouping); a single "Source (optional)" input prefilled as `[title](url)` when the capture has a URL. Every prompt saved from one refine shares that source — one capture, one provenance.
-- **Prompt editor** — same optional Source input; blank clears it.
+- **Prompt editor** — same optional Source input; blank clears it. The topic is an editable picker field: choosing another topic (or typing a new name, created via `POST /api/topic`) moves the prompt on save. `POST /api/prompt` validates that `topic_id` names a real topic; on a move the prompt is appended to the target topic's `position` order, and scheduling fields and events are left untouched.
 - **Browse topic** — compact prompt list (tighter rows, one-line clamp). When the topic has retired prompts, a **Hide retired** checkbox filters them in the list (CSS; remembered in `localStorage` as `sr-hide-retired`, per browser, default off). Danger zone **Delete permanently** cascade-hard-deletes the topic, all of its prompts (including retired), and their review events. Pending captures keep their free-text topic name hint.
 - **Migrate in** (Anki/Mochi) — decks map to topics; the headerless-Anki fallback param is `?topic=` (see `2026-08-22-anki-mochi-import.md`).
 

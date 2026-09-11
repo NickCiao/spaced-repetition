@@ -196,6 +196,78 @@ button.seg-opt { background: none; border: 0; color: inherit; font: inherit; }
 .prompt-editor-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .prompt-editor-foot-start { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 
+/* ── prompt editor page (new / edit): fields beside a live preview ─── */
+body.wide .content { max-width: 1040px; }
+.editor-layout { display: grid; gap: var(--space-8); align-items: start; }
+@media (min-width: 900px) {
+  .editor-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .editor-layout > .prompt-preview { position: sticky; top: 48px; }
+}
+.editor-layout textarea.input { min-height: 120px; }
+
+/* ── live preview (prompt-preview.js; shared by edit + refine) ─────── */
+.prompt-preview { display: flex; flex-direction: column; gap: var(--space-3); }
+.preview-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.preview-label {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+.preview-label i { font-size: 13px; }
+.preview-body { display: flex; flex-direction: column; gap: var(--space-3); }
+.preview-status { margin: 0; font-size: 13px; color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+.preview-faces { display: flex; flex-direction: column; gap: var(--space-3); }
+.preview-face { display: flex; flex-direction: column; gap: var(--space-2); }
+.preview-face-label {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 40%, transparent);
+}
+/* the card surface review draws on; body markup comes from session-card.js */
+.preview-card {
+  padding: var(--space-6); border-radius: var(--radius-lg);
+  background: var(--color-surface); box-shadow: var(--shadow-sm);
+  overflow-wrap: anywhere;
+}
+.preview-card .session-question, .preview-card .session-answer { font-size: 19px; line-height: 1.4; }
+.preview-card .session-question.dimmed { font-size: 15px; }
+.preview-card > :first-child > :first-child { margin-top: 0; }
+.preview-card > :last-child > :last-child { margin-bottom: 0; }
+.preview-card img { max-width: 100%; border-radius: var(--radius-sm); }
+.preview-hints { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); }
+.preview-hints li {
+  display: flex; gap: var(--space-2); align-items: baseline;
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+  font-size: 12.5px; line-height: 1.45;
+  color: color-mix(in srgb, var(--color-text) 78%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 9%, transparent);
+}
+.preview-hints li::before { content: "·"; color: var(--color-accent); }
+.preview-hint-text { flex: 1; min-width: 0; }
+.preview-hints code { font-size: 11.5px; }
+.preview-hint-field {
+  flex: none; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 45%, transparent);
+}
+
+/* formatting cheat-sheet */
+.md-help { font-size: 12px; color: color-mix(in srgb, var(--color-text) 60%, transparent); }
+.md-help summary {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer; list-style: none;
+  padding: 4px 8px; border-radius: var(--radius-md);
+}
+.md-help summary::-webkit-details-marker { display: none; }
+.md-help summary:hover { color: var(--color-text); background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.md-help[open] summary { color: var(--color-text); }
+.md-help dl {
+  display: grid; grid-template-columns: auto 1fr; gap: 4px var(--space-4);
+  margin: var(--space-2) 0 0; padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md); background: var(--color-surface);
+}
+.md-help dt { color: color-mix(in srgb, var(--color-text) 85%, transparent); }
+.md-help dd { margin: 0; }
+.md-help code { font-size: 11.5px; }
+
 /* ── topic picker ──────────────────────────────────────────────────── */
 .topic-picker { position: relative; }
 .topic-menu {

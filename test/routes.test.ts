@@ -298,6 +298,23 @@ describe("inbox and refine", () => {
     expect(body.answerHtml).toContain("this");
   });
 
+  it("preview renders the source line and returns authoring hints", async () => {
+    const res = await POST("/api/preview", {
+      kind: "qa", question: "q?", answer: "- a\n- b\nglued", source: "[Doc](https://ex.com/d)"
+    });
+    const body = await res.json() as { sourceHtml: string; hints: { field: string; message: string }[] };
+    expect(body.sourceHtml).toContain('<a href="https://ex.com/d"');
+    expect(body.sourceHtml).not.toContain("<p>");
+    expect(body.hints).toContainEqual({ field: "answer", message: expect.stringContaining("joins that bullet") });
+
+    const cloze = await POST("/api/preview", { kind: "cloze", question: "no span", answer: "" });
+    const cb = await cloze.json() as { hints: { message: string }[] };
+    expect(cb.hints.some(h => h.message.includes("{{hidden}}"))).toBe(true);
+
+    const clean = await POST("/api/preview", { kind: "qa", question: "q?", answer: "a" });
+    expect(((await clean.json()) as { hints: unknown[]; sourceHtml: string })).toMatchObject({ hints: [], sourceHtml: "" });
+  });
+
   it("refine dedupes topic names case-insensitively, like /api/topic", async () => {
     const { id: tid } = await (await POST("/api/topic", { name: "Case Topic" })).json() as { id: string };
     const cid = await seedCapture("case-cap");
@@ -338,6 +355,60 @@ describe("browse, prompt edit, settings", () => {
     expect(after?.question).toBe("after-edit?");
     expect(after?.due).toBe(before?.due);
     expect(after?.flag_note).toBeNull();
+  });
+
+  it("editing a prompt can move it to another topic, keeping its schedule", async () => {
+    const pid = await seedReviewPrompt("move-me");
+    const before = await env.DB.prepare("SELECT topic_id, due, stability, reps, state FROM prompts WHERE id = ?")
+      .bind(pid).first<{ topic_id: string; due: string; stability: number; reps: number; state: number }>();
+    const { id: target } = await (await POST("/api/topic", { name: "Move Target" })).json() as { id: string };
+    await POST("/api/prompt", { topic_id: target, kind: "qa", question: "already-here?", answer: "a" });
+
+    const res = await POST("/api/prompt", {
+      id: pid, topic_id: target, kind: "qa", question: "move-me", answer: "rev-a"
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, id: pid, topic_id: target });
+    const after = await env.DB.prepare("SELECT topic_id, position, due, stability, reps, state FROM prompts WHERE id = ?")
+      .bind(pid).first<{ topic_id: string; position: number; due: string; stability: number; reps: number; state: number }>();
+    expect(after?.topic_id).toBe(target);
+    expect(after?.position).toBe(1); // appended after the prompt already in the target
+    expect(after?.due).toBe(before?.due);
+    expect(after?.stability).toBe(before?.stability);
+    expect(after?.reps).toBe(before?.reps);
+    expect(after?.state).toBe(before?.state);
+    expect(before?.topic_id).not.toBe(target);
+
+    const html = await (await exports.default.fetch(`http://sr/browse/${target}`, AUTH)).text();
+    expect(html).toContain("move-me");
+  });
+
+  it("editing a prompt keeps its position when the topic is unchanged", async () => {
+    const { id: tid } = await (await POST("/api/topic", { name: "Stay Put" })).json() as { id: string };
+    const { id: first } = await (await POST("/api/prompt", { topic_id: tid, kind: "qa", question: "first?", answer: "a" })).json() as { id: string };
+    await POST("/api/prompt", { topic_id: tid, kind: "qa", question: "second?", answer: "b" });
+    await POST("/api/prompt", { id: first, topic_id: tid, kind: "qa", question: "first-edited?", answer: "a" });
+    const row = await env.DB.prepare("SELECT position FROM prompts WHERE id = ?").bind(first).first<{ position: number }>();
+    expect(row?.position).toBe(0);
+  });
+
+  it("rejects an unknown topic_id on create and edit", async () => {
+    const pid = await seedReviewPrompt("bad-topic");
+    const edit = await POST("/api/prompt", { id: pid, topic_id: "nope000000", kind: "qa", question: "q?", answer: "a" });
+    expect(edit.status).toBe(400);
+    const create = await POST("/api/prompt", { topic_id: "nope000000", kind: "qa", question: "q?", answer: "a" });
+    expect(create.status).toBe(400);
+  });
+
+  it("prompt editor shows a topic picker and the live preview", async () => {
+    const pid = await seedReviewPrompt("editor-ui");
+    const html = await (await exports.default.fetch(`http://sr/prompt/${pid}`, AUTH)).text();
+    expect(html).toContain('id="topic-picker"');
+    expect(html).toContain('value="Rev Topic"');
+    expect(html).toContain('id="preview"');
+    expect(html).toContain("/static/prompt-preview.js");
+    expect(html).toContain("/static/session-card.js");
+    expect(html).toContain('<body class="wide">');
   });
 
   it("editing a prompt sets and clears its source", async () => {
