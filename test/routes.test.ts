@@ -466,6 +466,54 @@ describe("browse, prompt edit, settings", () => {
     expect(html).not.toContain(question);
   });
 
+  it("browse topic lists retired prompts and offers Hide retired", async () => {
+    const { id: tid } = await (await POST("/api/topic", { name: "Mixed Retired" })).json() as { id: string };
+    await POST("/api/prompt", { topic_id: tid, kind: "qa", question: "still-active?", answer: "a" });
+    const { id: rid } = await (await POST("/api/prompt", {
+      topic_id: tid, kind: "qa", question: "old-retired?", answer: "b"
+    })).json() as { id: string };
+    await POST("/api/prompt", {
+      id: rid, topic_id: tid, kind: "qa", question: "old-retired?", answer: "b", retired: true
+    });
+    const html = await (await exports.default.fetch(`http://sr/browse/${tid}`, AUTH)).text();
+    expect(html).toContain("still-active?");
+    expect(html).toContain("old-retired?");
+    expect(html).toContain('class="row retired"');
+    expect(html).toContain("tag-neutral");
+    expect(html).toContain(">retired</span>");
+    expect(html).toContain('id="hide-retired"');
+    expect(html).toContain("Hide retired");
+    expect(html).toContain("sr-hide-retired");
+    expect(html).toContain('class="rows compact"');
+    expect(html).not.toContain("All prompts are retired.");
+  });
+
+  it("Hide retired is omitted when a topic has no retired prompts", async () => {
+    const { id: tid } = await (await POST("/api/topic", { name: "Active Only" })).json() as { id: string };
+    await POST("/api/prompt", { topic_id: tid, kind: "qa", question: "only-active?", answer: "a" });
+    const html = await (await exports.default.fetch(`http://sr/browse/${tid}`, AUTH)).text();
+    expect(html).toContain("only-active?");
+    expect(html).toContain('class="rows compact"');
+    expect(html).not.toContain('id="hide-retired"');
+    expect(html).not.toContain("sr-hide-retired");
+    expect(html).not.toContain("All prompts are retired.");
+  });
+
+  it("all-retired topic keeps Hide retired and empty copy", async () => {
+    const { id: tid } = await (await POST("/api/topic", { name: "All Retired" })).json() as { id: string };
+    const { id: rid } = await (await POST("/api/prompt", {
+      topic_id: tid, kind: "qa", question: "gone-from-review?", answer: "a"
+    })).json() as { id: string };
+    await POST("/api/prompt", {
+      id: rid, topic_id: tid, kind: "qa", question: "gone-from-review?", answer: "a", retired: true
+    });
+    const html = await (await exports.default.fetch(`http://sr/browse/${tid}`, AUTH)).text();
+    expect(html).toContain("gone-from-review?");
+    expect(html).toContain('id="hide-retired"');
+    expect(html).toContain("All prompts are retired.");
+    expect(html).not.toContain("No prompts yet");
+  });
+
   it("settings round-trip and validation", async () => {
     const ok = await POST("/api/settings", {
       session_cap: 25, desired_retention: 0.85, email_hour: 8, timezone: "America/New_York",

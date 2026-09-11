@@ -103,6 +103,7 @@ export async function browseTopic(topicId: string, env: Env): Promise<Response> 
   const prompts = (await env.DB.prepare(
     "SELECT * FROM prompts WHERE topic_id = ? ORDER BY position").bind(topicId).all<PromptRow>()).results;
   const active = prompts.filter(p => !p.retired).length;
+  const retired = prompts.length - active;
   const list = prompts.map(p => {
     const q = p.question.length > 120 ? p.question.slice(0, 120) + "…" : p.question;
     return `
@@ -113,6 +114,12 @@ export async function browseTopic(topicId: string, env: Env): Promise<Response> 
     </div>`;
   }).join("") ||
     `<p class='empty'>No prompts yet — add your first with <a href="/prompt/new?topic=${topic.id}">+ Prompt</a>.</p>`;
+  const hideToggle = retired
+    ? `<label class="check"><input type="checkbox" id="hide-retired"> Hide retired</label>`
+    : "";
+  const allRetiredEmpty = active === 0 && retired
+    ? `<p class="empty hide-retired-empty">All prompts are retired.</p>`
+    : "";
   const urlLine = topic.url && /^https?:\/\//i.test(topic.url)
     ? `<p class="topic-url"><a href="${escapeHtml(topic.url)}" target="_blank" rel="noopener">${escapeHtml(hostOnly(topic.url))}</a></p>`
     : "";
@@ -126,8 +133,11 @@ ${urlLine}
   <a class="btn btn-secondary" href="/?topic=${topic.id}&ahead=1">Review ahead</a>
   <a class="btn btn-secondary" href="/prompt/new?topic=${topic.id}"><i class="ph ph-plus"></i> Prompt</a>
 </div>
-<h6 class="kicker">Prompts <span class="count">${active}</span></h6>
-<div class="rows">${list}</div>
+<div class="kicker-row">
+  <h6 class="kicker">Prompts <span class="count">${active}</span></h6>
+  ${hideToggle}
+</div>
+<div class="rows compact">${list}${allRetiredEmpty}</div>
 <div class="danger">
   <button type="button" class="btn btn-secondary" id="delete-topic">Delete permanently</button>
   <p class="danger-note">Removes this topic${total ? `, its ${total} prompt${total === 1 ? "" : "s"},` : ""} and all review history. Cannot be undone.</p>
@@ -146,8 +156,19 @@ document.getElementById("delete-topic").onclick = async () => {
   if (res.ok) location.href = "/browse";
   else document.getElementById("delete-flash").textContent = (await res.json()).error ?? "Delete failed";
 };
-</script>`;
-  return page(topic.name, body, { shell });
+${retired ? `const hide = document.getElementById("hide-retired");
+hide.checked = document.documentElement.classList.contains("hide-retired");
+hide.onchange = () => {
+  localStorage.setItem("sr-hide-retired", hide.checked ? "1" : "0");
+  document.documentElement.classList.toggle("hide-retired", hide.checked);
+};
+` : ""}</script>`;
+  return page(topic.name, body, {
+    shell,
+    extraHead: retired
+      ? `<script>if(localStorage.getItem("sr-hide-retired")==="1")document.documentElement.classList.add("hide-retired")</script>`
+      : undefined
+  });
 }
 
 export async function promptForm(idOrNew: string, request: Request, env: Env): Promise<Response> {

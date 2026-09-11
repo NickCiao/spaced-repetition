@@ -56,7 +56,7 @@ Restore is upgrade-on-restore: a legacy zip imports cleanly and the next export 
 - **Capture** — "Topic (optional)" picker → `captures.topic` as plain text (works offline/queued; no topic row is created until refine).
 - **Refine** — topic picker preselected from `cap.topic` (legacy captures fall back to `cap.title`, which used to hold the typed grouping); a single "Source (optional)" input prefilled as `[title](url)` when the capture has a URL. Every prompt saved from one refine shares that source — one capture, one provenance.
 - **Prompt editor** — same optional Source input; blank clears it.
-- **Browse topic** — danger zone **Delete permanently** cascade-hard-deletes the topic, all of its prompts (including retired), and their review events. Pending captures keep their free-text topic name hint.
+- **Browse topic** — compact prompt list (tighter rows, one-line clamp). When the topic has retired prompts, a **Hide retired** checkbox filters them in the list (CSS; remembered in `localStorage` as `sr-hide-retired`, per browser, default off). Danger zone **Delete permanently** cascade-hard-deletes the topic, all of its prompts (including retired), and their review events. Pending captures keep their free-text topic name hint.
 - **Migrate in** (Anki/Mochi) — decks map to topics; the headerless-Anki fallback param is `?topic=` (see `2026-08-22-anki-mochi-import.md`).
 
 ## API surface (renames)
