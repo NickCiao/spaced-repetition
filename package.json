@@ -12,6 +12,7 @@
     "db:wipe:local": "bash scripts/db-wipe-local.sh",
     "db:wipe:remote": "bash scripts/db-wipe-remote.sh",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "types": "wrangler types",
     "vendor:static": "node scripts/vendor-static.mjs",
     "postinstall": "npm run vendor:static"
