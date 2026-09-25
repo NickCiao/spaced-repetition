@@ -52,6 +52,7 @@ On the phone: open `/capture`, then Share → Add to Home Screen.
 | `npm run setup` | First-time production: D1, R2, migrations, `SR_TOKEN`, deploy |
 | `npm run dev` | Local dev server (`http://localhost:8787/?token=devtoken`) |
 | `npm test` | Test suite |
+| `npm run typecheck` | TypeScript check (`tsc --noEmit`); CI runs this and `npm test` on pushes to `main` and on PRs |
 | `npm run migrate:local` | Apply D1 migrations locally |
 | `npm run migrate:remote` | Apply D1 migrations to production |
 | `npm run deploy` | Migrate remote + deploy worker (secrets unchanged) |
