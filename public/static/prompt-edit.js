@@ -1,6 +1,6 @@
 /* New / Edit prompt form (browse.ts promptForm): kind toggle, cloze helper,
-   topic picker (moving a prompt = picking another topic), live preview, save
-   and delete. Reads its initial state from #prompt-editor data attributes. */
+   topic picker (moving a prompt = picking another topic), live preview, save,
+   retire/restore (immediate, keeps unsaved edits) and delete. Reads its initial state from #prompt-editor data attributes. */
 (() => {
   const root = document.getElementById("prompt-editor");
   const $ = (id) => document.getElementById(id);
@@ -67,7 +67,6 @@
         question: $("q").value,
         answer: $("a").value,
         source: $("psource").value,
-        retired: $("retired").checked,
         clear_flag: true
       };
       const res = await fetch("/api/prompt", {
@@ -79,6 +78,29 @@
       flash.textContent = err.message || "Save failed";
     } finally { btn.disabled = false; }
   };
+
+  const retire = $("retire-prompt");
+  if (retire) {
+    retire.onclick = async () => {
+      const toRetired = retire.dataset.retired !== "1";
+      if (toRetired && !confirm("Retire this prompt? It will be hidden from review but can be restored here.")) return;
+      retire.disabled = true;
+      try {
+        const res = await fetch(`/api/prompt/${$("pid").value}/retire`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ retired: toRetired })
+        });
+        if (!res.ok) { $("flash").textContent = (await res.json()).error || "Retire failed"; return; }
+        retire.dataset.retired = toRetired ? "1" : "0";
+        retire.textContent = toRetired ? "Restore to review" : "Retire";
+        $("retire-note").textContent = toRetired
+          ? "Retired: hidden from review. Restoring keeps its schedule and history."
+          : "Hides this prompt from review. Recoverable: its schedule and history are kept.";
+        $("retired-tag").hidden = !toRetired;
+      } catch (err) {
+        $("flash").textContent = err.message || "Retire failed";
+      } finally { retire.disabled = false; }
+    };
+  }
 
   const del = $("delete-prompt");
   if (del) {

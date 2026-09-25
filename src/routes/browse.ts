@@ -199,7 +199,7 @@ export async function promptForm(idOrNew: string, request: Request, env: Env): P
 </div>` : "";
   const body = `
 <a class="crumb" href="/browse/${escapeHtml(topicId)}"><i class="ph ph-arrow-left"></i> ${escapeHtml(topicName)}</a>
-<h1 class="page-title">${p ? "Edit prompt" : "New prompt"}</h1>
+<h1 class="page-title">${p ? "Edit prompt" : "New prompt"}${p ? ` <span class="tag tag-neutral" id="retired-tag"${p.retired ? "" : " hidden"}>retired</span>` : ""}</h1>
 ${flagCard}
 <div class="editor-layout" id="prompt-editor" data-topic-id="${escapeHtml(topicId)}" data-topic-name="${escapeHtml(topicName)}">
 <form class="form" id="prompt-form" method="post" action="/api/prompt">
@@ -232,7 +232,6 @@ ${flagCard}
     <label for="psource">Source <span class="note">— optional; where this came from, markdown links work</span></label>
     <input class="input" type="text" id="psource" value="${escapeHtml(p?.source ?? "")}" placeholder="[Title](https://…) or plain text" autocomplete="off">
   </div>
-  <label class="check"><input type="checkbox" id="retired"${p?.retired ? " checked" : ""}> Retired <span class="note">hidden from review; recoverable</span></label>
   <div class="form-actions">
     <button type="submit" class="btn btn-primary" id="save">Save</button>
   </div>
@@ -241,6 +240,8 @@ ${flagCard}
 <div id="preview"></div>
 </div>
 ${p ? `<div class="danger">
+  <button type="button" class="btn btn-secondary" id="retire-prompt" data-retired="${p.retired ? "1" : "0"}">${p.retired ? "Restore to review" : "Retire"}</button>
+  <p class="danger-note" id="retire-note">${p.retired ? "Retired: hidden from review. Restoring keeps its schedule and history." : "Hides this prompt from review. Recoverable: its schedule and history are kept."}</p>
   <button type="button" class="btn btn-secondary" id="delete-prompt">Delete permanently</button>
   <p class="danger-note">Removes this prompt and its review history. Cannot be undone.</p>
 </div>` : ""}`;
@@ -286,10 +287,12 @@ export async function promptApi(request: Request, env: Env): Promise<Response> {
     // placement change — FSRS fields and the event log stay untouched.
     const moved = existing.topic_id !== b.topic_id;
     const position = moved ? await nextPosition() : existing.position;
+    // `retired` omitted = leave as is (the editor retires via /api/prompt/:id/retire).
+    const retired = b.retired === undefined ? null : b.retired ? 1 : 0;
     await env.DB.prepare(
-      `UPDATE prompts SET topic_id=?, position=?, kind=?, question=?, answer=?, source=?, retired=?, updated_at=?
+      `UPDATE prompts SET topic_id=?, position=?, kind=?, question=?, answer=?, source=?, retired=COALESCE(?, retired), updated_at=?
         ${b.clear_flag ? ", flag_note=NULL" : ""} WHERE id=?`
-    ).bind(b.topic_id, position, b.kind, question, answer, source, b.retired ? 1 : 0, ts, b.id).run();
+    ).bind(b.topic_id, position, b.kind, question, answer, source, retired, ts, b.id).run();
     return Response.json({ ok: true, id: b.id, topic_id: b.topic_id });
   }
   const id = newId();
@@ -307,6 +310,17 @@ export async function deletePrompt(id: string, env: Env): Promise<Response> {
   await env.DB.prepare("DELETE FROM events WHERE prompt_id = ?").bind(id).run();
   await env.DB.prepare("DELETE FROM prompts WHERE id = ?").bind(id).run();
   return Response.json({ ok: true, ...(await navCounts(env.DB)) });
+}
+
+/** Retire or restore one prompt. FSRS state and the event log are untouched, so restoring is lossless. */
+export async function retirePrompt(id: string, request: Request, env: Env): Promise<Response> {
+  if (!/^[a-z0-9]{10}$/.test(id)) return new Response("not found", { status: 404 });
+  const b = await request.json<{ retired?: unknown }>().catch(() => null);
+  if (typeof b?.retired !== "boolean") return Response.json({ error: "retired must be true or false" }, { status: 400 });
+  const res = await env.DB.prepare("UPDATE prompts SET retired=?, updated_at=? WHERE id=?")
+    .bind(b.retired ? 1 : 0, nowIso(), id).run();
+  if (!res.meta.changes) return Response.json({ error: "unknown prompt" }, { status: 404 });
+  return Response.json({ ok: true, retired: b.retired, ...(await navCounts(env.DB)) });
 }
 
 /** Cascade hard-delete: events → prompts → topic. Captures keep their free-text topic hint. */
