@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { newId, nowIso } from "../src/db";
 import { buildSession, interleave } from "../src/session";
 import { endOfLocalDay } from "../src/clock";
+import { wipeData } from "./helpers";
 
 async function seedPrompt(topicId: string, opts: { due: string; stability?: number; lastReview?: string | null; question?: string; source?: string | null }) {
   const id = newId();
@@ -131,5 +132,27 @@ describe("interleave", () => {
     const out = interleave(items({ a: 5, b: 1 }), x => x.k, seeded(3));
     expect(out.filter(x => x.k === "a").length).toBe(5);
     expect(out.filter(x => x.k === "b").length).toBe(1);
+  });
+});
+
+describe("buildSession order", () => {
+  it("never serves two prompts from one topic back to back when the mix allows", async () => {
+    await wipeData();
+    const now = new Date();
+    const past = new Date(now.getTime() - 5 * 86400_000).toISOString();
+    const reviewed = new Date(now.getTime() - 10 * 86400_000).toISOString();
+    // Identical schedule state, inserted grouped by topic: priority order alone
+    // would serve A A A B B B.
+    for (const name of ["Topic A", "Topic B"]) {
+      const tid = newId();
+      await env.DB.prepare("INSERT INTO topics (id, name, url, meta, created_at) VALUES (?, ?, NULL, '{}', ?)")
+        .bind(tid, name, nowIso()).run();
+      for (let i = 0; i < 3; i++) await seedPrompt(tid, { due: past, stability: 5, lastReview: reviewed });
+    }
+    for (let run = 0; run < 5; run++) {
+      const s = await buildSession(env.DB, { ahead: false, topicId: null, cap: 20, tz: "UTC" }, now);
+      expect(s.cards.length).toBe(6);
+      for (let i = 1; i < s.cards.length; i++) expect(s.cards[i].topicName).not.toBe(s.cards[i - 1].topicName);
+    }
   });
 });

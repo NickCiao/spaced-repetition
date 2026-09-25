@@ -39,18 +39,29 @@ describe("scheduler", () => {
     expect(next).toBeLessThanOrEqual(2 * 86400_000);
   });
 
-  it("replay determinism: same grades + timestamps → identical state", () => {
-    const run = () => {
-      let f = newCardFields(day(0));
-      f = applyGrade(f, "remembered", day(0), R);
-      f = applyGrade(f, "forgot", day(3), R);
-      f = applyGrade(f, "remembered", day(4), R);
-      return f;
-    };
-    expect(run()).toEqual(run());
+  it("golden sequence: fixed grades + timestamps → exact FSRS state", () => {
+    // Restore replays the event log, so these numbers are the contract. They pin
+    // enable_fuzz: false and enable_short_term: false (either would move the due
+    // dates, and short-term would put a forgotten card in Relearning, state 3),
+    // and flag any ts-fsrs upgrade that changes scheduling. Values from ts-fsrs 5.4.1.
+    const steps = [
+      ["remembered", 0, "2026-01-04T08:00:00.000Z", 2.3065, 2.11810397, 1, 0, 2],
+      ["remembered", 3, "2026-01-18T08:00:00.000Z", 13.82690327, 2.11121424, 2, 0, 2],
+      ["forgot", 12, "2026-01-15T08:00:00.000Z", 1.6496484, 7.39223814, 3, 1, 2],
+      ["remembered", 13, "2026-01-18T08:00:00.000Z", 3.67172981, 7.38007427, 4, 1, 2],
+      ["remembered", 20, "2026-02-02T08:00:00.000Z", 12.49730706, 7.36792257, 5, 1, 2]
+    ] as const;
+    let f = newCardFields(day(0));
+    for (const [grade, at, due, stability, difficulty, reps, lapses, state] of steps) {
+      f = applyGrade(f, grade, day(at), R);
+      expect({ due: f.due, reps: f.reps, lapses: f.lapses, state: f.state }, `${grade} on day ${at}`)
+        .toEqual({ due, reps, lapses, state });
+      expect(f.stability).toBeCloseTo(stability, 6);
+      expect(f.difficulty).toBeCloseTo(difficulty, 6);
+    }
   });
 
-  it("retrievability decays over time and orders weakest-first", () => {
+  it("retrievability decays over time and stays within [0, 1]", () => {
     let f = newCardFields(day(0));
     f = applyGrade(f, "remembered", day(0), R);
     const early = retrievability(f, day(1));

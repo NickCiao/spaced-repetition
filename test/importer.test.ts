@@ -62,6 +62,27 @@ describe("export / import / restore", () => {
     expect(diff.retired.length).toBe(0);
   });
 
+  it("omitting apply is a dry run: the diff is reported, nothing is written", async () => {
+    await seedViaApi();
+    const files = await download();
+    const mdName = Object.keys(files).find(n => n.startsWith("prompts/") && strFromU8(files[n]).includes("IQ1?"))!;
+    files[mdName] = strToU8(strFromU8(files[mdName]).replace("IA1", "IA1-edited"));
+
+    const res = await post("/import", zipSync(files));
+    expect(res.status).toBe(200);
+    const body = await res.json() as any;
+    expect(body.diff.edited.length).toBe(1);
+    expect(body).not.toHaveProperty("applied");
+    const row = await env.DB.prepare("SELECT answer FROM prompts WHERE question = 'IQ1?'").first();
+    expect(row?.answer).toBe("IA1");
+
+    // Restore is destructive, so it needs apply=1 spelled out too.
+    await wipeData();
+    expect((await post("/import?restore=1", zipSync(files))).status).toBe(400);
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM prompts").first<{ n: number }>();
+    expect(n?.n).toBe(0);
+  });
+
   it("a prompt saved with trailing whitespace is not a phantom edit on re-import", async () => {
     // The write-side normalization in /api/prompt exists to keep export → dry-run
     // diffs at zero (parse trims trailing blank lines); this locks that in for the
