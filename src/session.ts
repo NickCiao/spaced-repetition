@@ -21,6 +21,43 @@ export type Session = {
 
 type Joined = PromptRow & { topic_name: string };
 
+/**
+ * Presentation order for a session's cards. Selection (which cards make the cap) stays by
+ * priority; the order they are shown in is shuffled so no fixed sequence can cue recall, and
+ * cards from the same source are kept apart where the mix allows — each step takes from the
+ * source with the most cards left, other than the one just shown.
+ */
+export function interleave<T>(items: T[], key: (t: T) => string, rand: () => number = Math.random): T[] {
+  const groups = new Map<string, T[]>();
+  for (const it of items) {
+    const k = key(it);
+    const g = groups.get(k);
+    if (g) g.push(it); else groups.set(k, [it]);
+  }
+  const pools = [...groups.values()].map(g => shuffle(g, rand));
+  const out: T[] = [];
+  let last: T[] | null = null;
+  while (out.length < items.length) {
+    const open = pools.filter(g => g.length > 0);
+    const choices = open.length > 1 ? open.filter(g => g !== last) : open;
+    const most = Math.max(...choices.map(g => g.length));
+    const top = choices.filter(g => g.length === most);
+    const pick = top[Math.floor(rand() * top.length)];
+    out.push(pick.pop()!);
+    last = pick;
+  }
+  return out;
+}
+
+function shuffle<T>(items: T[], rand: () => number): T[] {
+  const a = items.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export async function buildSession(
   db: D1Database,
   opts: { ahead: boolean; topicId: string | null; cap: number; tz: string },
@@ -51,6 +88,7 @@ export async function buildSession(
     rows = all.slice(0, opts.cap);
     dueRemaining = Math.max(0, all.length - opts.cap);
   }
+  rows = interleave(rows, r => r.topic_id);
 
   const next = await db.prepare(
     `SELECT MIN(due) AS next_due FROM prompts WHERE retired = 0 AND due >= ?${opts.topicId ? " AND topic_id = ?" : ""}`
