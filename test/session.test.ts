@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import { newId, nowIso } from "../src/db";
-import { buildSession } from "../src/session";
+import { buildSession, interleave } from "../src/session";
 import { endOfLocalDay } from "../src/clock";
 
 async function seedPrompt(topicId: string, opts: { due: string; stability?: number; lastReview?: string | null; question?: string; source?: string | null }) {
@@ -28,32 +28,34 @@ describe("buildSession", () => {
       .bind(topic, nowIso()).run();
   });
 
-  it("serves due cards weakest-first, reports nextDue, respects cap", async () => {
+  it("selects due cards weakest-first under the cap, reports nextDue", async () => {
     const weak = await seedPrompt(topic, { due: past(20), stability: 1, lastReview: past(30), question: "weak", source: "[Paper](https://ex.com/p)" });
     const strong = await seedPrompt(topic, { due: past(1), stability: 200, lastReview: past(2), question: "strong" });
     await seedPrompt(topic, { due: future(3), question: "future" });
 
     const s = await buildSession(env.DB, { ahead: false, topicId: topic, cap: 20, tz: "UTC" }, now);
-    expect(s.cards.length).toBe(2);
-    expect(s.cards[0].id).toBe(weak);
-    expect(s.cards[1].id).toBe(strong);
+    expect(s.cards.map(c => c.id).sort()).toEqual([weak, strong].sort());
     expect(s.nextDue).not.toBeNull();
     expect(s.nextDueCount).toBeGreaterThanOrEqual(1); // the "future" prompt seeded above
-    expect(s.cards[0].topicName).toBe("Sess Topic");
+    const w = s.cards.find(c => c.id === weak)!;
+    expect(w.topicName).toBe("Sess Topic");
     // Attribution renders as inline markdown; absent source is null, not "".
-    expect(s.cards[0].sourceHtml).toContain('<a href="https://ex.com/p"');
-    expect(s.cards[0].sourceHtml).toContain("Paper");
-    expect(s.cards[1].sourceHtml).toBeNull();
+    expect(w.sourceHtml).toContain('<a href="https://ex.com/p"');
+    expect(w.sourceHtml).toContain("Paper");
+    expect(s.cards.find(c => c.id === strong)!.sourceHtml).toBeNull();
 
+    // The cap keeps the weakest; presentation order is shuffled (see interleave).
     const capped = await buildSession(env.DB, { ahead: false, topicId: topic, cap: 1, tz: "UTC" }, now);
-    expect(capped.cards.length).toBe(1);
+    expect(capped.cards.map(c => c.id)).toEqual([weak]);
     expect(capped.dueRemaining).toBe(1);
   });
 
-  it("ahead mode serves not-yet-due, soonest first", async () => {
-    const s = await buildSession(env.DB, { ahead: true, topicId: topic, cap: 20, tz: "UTC" }, now);
-    expect(s.cards.length).toBeGreaterThanOrEqual(1);
+  it("ahead mode serves not-yet-due, soonest first under the cap", async () => {
+    const later = await seedPrompt(topic, { due: future(9), question: "later" });
+    const s = await buildSession(env.DB, { ahead: true, topicId: topic, cap: 1, tz: "UTC" }, now);
+    expect(s.cards.length).toBe(1);
     expect(s.cards[0].questionHtml).toContain("future");
+    await env.DB.prepare("DELETE FROM prompts WHERE id = ?").bind(later).run();
     expect(s.ahead).toBe(true);
   });
 
@@ -87,5 +89,47 @@ describe("buildSession", () => {
     expect(s.cards.length).toBe(0);
     expect(s.nextDue).toBe("2026-08-22T08:00:00.000Z");
     expect(s.nextDueCount).toBe(2);
+  });
+});
+
+function seeded(seed: number) {
+  // mulberry32 — deterministic rand for order tests
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+describe("interleave", () => {
+  const items = (spec: Record<string, number>) =>
+    Object.entries(spec).flatMap(([k, n]) => Array.from({ length: n }, (_, i) => ({ k, i })));
+
+  it("keeps every card exactly once", () => {
+    const xs = items({ a: 4, b: 3, c: 1 });
+    const out = interleave(xs, x => x.k, seeded(1));
+    expect(out.length).toBe(xs.length);
+    expect(new Set(out).size).toBe(xs.length);
+  });
+
+  it("never puts two cards from one source back to back when the mix allows", () => {
+    for (let seed = 1; seed <= 50; seed++) {
+      const out = interleave(items({ a: 5, b: 3, c: 2 }), x => x.k, seeded(seed));
+      for (let i = 1; i < out.length; i++) expect(out[i].k).not.toBe(out[i - 1].k);
+    }
+  });
+
+  it("does not replay a fixed order", () => {
+    const xs = items({ a: 8 });
+    const orders = new Set(Array.from({ length: 20 }, (_, s) =>
+      interleave(xs, x => x.k, seeded(s + 1)).map(x => x.i).join(",")));
+    expect(orders.size).toBeGreaterThan(1);
+  });
+
+  it("still serves everything when one source dominates", () => {
+    const out = interleave(items({ a: 5, b: 1 }), x => x.k, seeded(3));
+    expect(out.filter(x => x.k === "a").length).toBe(5);
+    expect(out.filter(x => x.k === "b").length).toBe(1);
   });
 });

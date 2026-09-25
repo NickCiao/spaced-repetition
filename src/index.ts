@@ -5,7 +5,7 @@ import { gradeApi, reviewPage } from "./routes/review";
 import { captureApi, capturePage, capturesToday, topicsApi } from "./routes/capture";
 import { serveAsset, uploadAsset } from "./routes/assets";
 import { deleteCapture, inboxPage, previewApi, refineApi, refinePage } from "./routes/inbox";
-import { browseIndex, browseTopic, deletePrompt, deleteTopic, promptApi, promptForm, topicApi } from "./routes/browse";
+import { browseIndex, browseTopic, deletePrompt, deleteTopic, promptApi, promptForm, retirePrompt, topicApi } from "./routes/browse";
 import { settingsApi, settingsPage } from "./routes/settings";
 import { emailLoginLink, loginPage, verifyLogin } from "./routes/auth";
 import { exportZip, importForeign, importZip } from "./routes/transfer";
@@ -70,6 +70,8 @@ export default {
     if (url.pathname === "/api/prompt" && request.method === "POST") return promptApi(request, env);
     const promptDelMatch = url.pathname.match(/^\/api\/prompt\/([a-z0-9]{10})\/delete$/);
     if (promptDelMatch && request.method === "POST") return deletePrompt(promptDelMatch[1], env);
+    const promptRetireMatch = url.pathname.match(/^\/api\/prompt\/([a-z0-9]{10})\/retire$/);
+    if (promptRetireMatch && request.method === "POST") return retirePrompt(promptRetireMatch[1], request, env);
     if (url.pathname === "/settings" && request.method === "GET") return settingsPage(env);
     if (url.pathname === "/api/settings" && request.method === "POST") return settingsApi(request, env);
     if (url.pathname === "/export.zip" && request.method === "GET") return exportZip(env);

@@ -559,6 +559,39 @@ describe("browse, prompt edit, settings", () => {
     expect(html).not.toContain("All prompts are retired.");
   });
 
+  it("prompt editor retires and restores in place; Save leaves retired alone", async () => {
+    const { id: tid } = await (await POST("/api/topic", { name: "Retire From Editor" })).json() as { id: string };
+    const { id: pid } = await (await POST("/api/prompt", {
+      topic_id: tid, kind: "qa", question: "retire-me?", answer: "a"
+    })).json() as { id: string };
+    const retiredOf = async () =>
+      (await env.DB.prepare("SELECT retired FROM prompts WHERE id = ?").bind(pid).first<{ retired: number }>())?.retired;
+
+    let html = await (await exports.default.fetch(`http://sr/prompt/${pid}`, AUTH)).text();
+    expect(html).toContain('id="retire-prompt" data-retired="0">Retire</button>');
+    expect(html).not.toContain('id="retired"'); // the old easy-to-miss checkbox is gone
+
+    expect((await POST(`/api/prompt/${pid}/retire`, { retired: true })).status).toBe(200);
+    expect(await retiredOf()).toBe(1);
+    html = await (await exports.default.fetch(`http://sr/prompt/${pid}`, AUTH)).text();
+    expect(html).toContain(">Restore to review</button>");
+    expect(html).toMatch(/id="retired-tag">retired</);
+
+    // Saving edits without a `retired` field keeps the prompt retired
+    await POST("/api/prompt", { id: pid, topic_id: tid, kind: "qa", question: "retire-me, edited?", answer: "a" });
+    expect(await retiredOf()).toBe(1);
+
+    expect((await POST(`/api/prompt/${pid}/retire`, { retired: false })).status).toBe(200);
+    expect(await retiredOf()).toBe(0);
+
+    expect((await POST(`/api/prompt/${pid}/retire`, {})).status).toBe(400);
+    expect((await POST("/api/prompt/nopexxxxxx/retire", { retired: true })).status).toBe(404);
+    expect((await POST("/api/prompt/not-an-id/retire", { retired: true })).status).toBe(404);
+
+    const newForm = await (await exports.default.fetch(`http://sr/prompt/new?topic=${tid}`, AUTH)).text();
+    expect(newForm).not.toContain("retire-prompt");
+  });
+
   it("Hide retired is omitted when a topic has no retired prompts", async () => {
     const { id: tid } = await (await POST("/api/topic", { name: "Active Only" })).json() as { id: string };
     await POST("/api/prompt", { topic_id: tid, kind: "qa", question: "only-active?", answer: "a" });
