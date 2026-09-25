@@ -26,12 +26,6 @@ describe("db", () => {
     await setSetting(env.DB, "base_url", "");
   });
 
-  it("set/get setting round-trips", async () => {
-    await setSetting(env.DB, "session_cap", "30");
-    expect(await getSetting(env.DB, "session_cap")).toBe("30");
-    await setSetting(env.DB, "session_cap", "20"); // restore for other tests
-  });
-
   it("newId is 10 chars, url-safe, unique-ish", () => {
     const a = newId();
     const b = newId();

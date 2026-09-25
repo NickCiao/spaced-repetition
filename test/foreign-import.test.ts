@@ -51,6 +51,20 @@ Unique foreign import Q?	Unique foreign import A.`;
     expect(row?.answer).toBe("Unique foreign import A.");
   });
 
+  it("omitting apply is a dry run", async () => {
+    const tsv = `#separator:tab
+#html:true
+Dry by default Q?	Dry by default A.`;
+    const before = await env.DB.prepare("SELECT COUNT(*) AS n FROM prompts").first<{ n: number }>();
+    const res = await post("/import/foreign?topic=ForeignDry", tsv);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { preview?: { created: number }; applied?: unknown };
+    expect(body.preview?.created).toBe(1);
+    expect(body.applied).toBeUndefined();
+    const after = await env.DB.prepare("SELECT COUNT(*) AS n FROM prompts").first<{ n: number }>();
+    expect(after?.n).toBe(before?.n);
+  });
+
   it("second apply of same file is all skips", async () => {
     const tsv = `#separator:tab
 #html:true

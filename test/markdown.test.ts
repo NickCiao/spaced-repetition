@@ -44,6 +44,8 @@ describe("renderMarkdown", () => {
   it("rewrites relative asset refs to /assets/<id> (32-hex ids only)", () => {
     const id = "abc123def0abc123def0abc123def012";
     expect(renderMarkdown(`![diagram](assets/${id})`)).toContain(`src="/assets/${id}"`);
+    expect(renderMarkdown("![diagram](assets/not-an-id)")).not.toContain("<img");
+    expect(renderMarkdown("![diagram](https://ex.com/pic.png)")).not.toContain("<img"); // no remote images
   });
 
   it("hostile hrefs cannot inject markup or scripts", () => {

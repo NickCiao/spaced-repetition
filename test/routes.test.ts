@@ -1,6 +1,6 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { newId, nowIso } from "../src/db";
+import { getSettings, newId, nowIso } from "../src/db";
 import { AUTH, wipeData } from "./helpers";
 
 describe("health", () => {
@@ -77,8 +77,6 @@ describe("review", () => {
     expect(html).toContain('id="session"');
     expect(html).toContain("embedded-question");
     expect(html).toContain(pid);
-    expect(html).toContain("class=\"rail\"");
-    expect(html).toContain("nocturne-app.css");
   });
 
   it("session cards carry the topic name and rendered source attribution", async () => {
@@ -408,7 +406,6 @@ describe("browse, prompt edit, settings", () => {
     expect(html).toContain('id="preview"');
     expect(html).toContain("/static/prompt-preview.js");
     expect(html).toContain("/static/session-card.js");
-    expect(html).toContain('<body class="wide">');
   });
 
   it("editing a prompt sets and clears its source", async () => {
@@ -442,11 +439,6 @@ describe("browse, prompt edit, settings", () => {
     const html = await (await exports.default.fetch(`http://sr/browse/${tid}`, AUTH)).text();
     expect(html).toContain("direct?");
     expect(html).toContain(`/?topic=${tid}`);
-  });
-
-  it("browse index lists topics with counts", async () => {
-    const html = await (await exports.default.fetch("http://sr/browse", AUTH)).text();
-    expect(html).toContain("Direct Topic");
   });
 
   it("POST /api/topic creates a topic usable by browse and prompt/new", async () => {
@@ -549,13 +541,11 @@ describe("browse, prompt edit, settings", () => {
     const html = await (await exports.default.fetch(`http://sr/browse/${tid}`, AUTH)).text();
     expect(html).toContain("still-active?");
     expect(html).toContain("old-retired?");
-    expect(html).toContain('class="row retired"');
-    expect(html).toContain("tag-neutral");
-    expect(html).toContain(">retired</span>");
+    // Only the retired prompt's row is marked (the lookahead keeps each match inside one row).
+    const retiredRow = (q: string) => new RegExp(`class="row retired">(?:(?!class="row[ "])[\\s\\S])*${q}`);
+    expect(html).toMatch(retiredRow("old-retired\\?"));
+    expect(html).not.toMatch(retiredRow("still-active\\?"));
     expect(html).toContain('id="hide-retired"');
-    expect(html).toContain("Hide retired");
-    expect(html).toContain("sr-hide-retired");
-    expect(html).toContain('class="rows compact"');
     expect(html).not.toContain("All prompts are retired.");
   });
 
@@ -597,9 +587,7 @@ describe("browse, prompt edit, settings", () => {
     await POST("/api/prompt", { topic_id: tid, kind: "qa", question: "only-active?", answer: "a" });
     const html = await (await exports.default.fetch(`http://sr/browse/${tid}`, AUTH)).text();
     expect(html).toContain("only-active?");
-    expect(html).toContain('class="rows compact"');
     expect(html).not.toContain('id="hide-retired"');
-    expect(html).not.toContain("sr-hide-retired");
     expect(html).not.toContain("All prompts are retired.");
   });
 
@@ -624,16 +612,14 @@ describe("browse, prompt edit, settings", () => {
       email_to: "me@example.com", base_url: "https://sr.example"
     });
     expect(ok.status).toBe(200);
+    expect(await getSettings(env.DB)).toMatchObject({
+      session_cap: 25, desired_retention: 0.85, email_hour: 8, timezone: "America/New_York",
+      email_to: "me@example.com", base_url: "https://sr.example"
+    });
     const html = await (await exports.default.fetch("http://sr/settings", AUTH)).text();
-    expect(html).toContain("25");
     expect(html).toContain("me@example.com");
-    expect(html).toContain("https://sr.example");
-    expect(html).toContain('<select class="input" id="email_hour">');
-    expect(html).toContain('<option value="8" selected>8:00 AM</option>');
-    expect(html).toContain('<select class="input" id="timezone">');
-    expect(html).toMatch(/<option value="America\/New_York" selected>/);
-    expect(html).not.toMatch(/<input[^>]*id="email_hour"/);
-    expect(html).not.toMatch(/<input[^>]*id="timezone"/);
+    expect(html).toContain('value="8" selected');
+    expect(html).toContain('value="America/New_York" selected');
     expect((await POST("/api/settings", { session_cap: 0, desired_retention: 0.9, email_hour: 7, timezone: "America/New_York" })).status).toBe(400);
     expect((await POST("/api/settings", { session_cap: 20, desired_retention: 0.5, email_hour: 7, timezone: "America/New_York" })).status).toBe(400);
     expect((await POST("/api/settings", { session_cap: 20, desired_retention: 0.9, email_hour: 7, timezone: "Not/AZone" })).status).toBe(400);

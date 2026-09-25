@@ -76,8 +76,8 @@ describe("rewriteMediaRefs", () => {
   });
 });
 
-describe("mochi zip fixture", () => {
-  it("builds minimal mochi for template resolution", () => {
+describe("parseMochi templates", () => {
+  it("resolves template fields into a Q/A prompt", () => {
     const data = {
       "~:decks": [{
         "~:name": "Test Deck",
