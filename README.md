@@ -129,6 +129,12 @@ Restore onto a blank deploy: `.../import?apply=1&restore=1`.
 
 The export zip includes `retired.jsonl` (retired prompts' content archive). To un-retire a prompt, open it from Browse and use **Restore to review** (the edit page also has **Retire**); or re-add its block with its `<!-- id -->` comment into its topic file during import. **Delete** (review overflow or edit page) removes a prompt and its review history permanently — it will not appear in export and cannot be undone through the app (only an older backup zip could bring it back). **Delete topic** (Browse → topic → Delete permanently) cascade-removes the topic, all of its prompts, and their review history the same way.
 
+## Evolve (branch `feature/prompt-evolution`)
+
+Once a prompt is well memorized, **Edit prompt → Evolve** opens a session with an AI tutor that probes the mental model behind the prompt and proposes edits, follow-up prompts, or retirement. Nothing is written to your prompts until you press **Accept** on a proposal (or choose **Retire**). Design: `docs/design/2026-09-29-prompt-evolution.md`.
+
+Setup: Settings → **Tutor** — pick a provider (Anthropic or OpenAI), paste that provider's API key, optionally override the model (defaults: `claude-opus-5-5` / `gpt-6-astra`). Keys live in D1 `settings` and are never exported. Session transcripts are stored in R2 under `evolve/<promptId>/`; parent→child lineage is the `lineage` settings row. No migrations: roll back by redeploying `main`.
+
 ## Backup
 
 Manual by design: Settings → **Export everything** (or the curl above), whenever you think of it. D1 Time Travel adds an in-vendor safety net — point-in-time restore for 30 days on Workers Paid, 7 days on Free.
