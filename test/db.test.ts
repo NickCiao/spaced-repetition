@@ -13,7 +13,11 @@ describe("db", () => {
       timezone: "America/Los_Angeles",
       email_to: "",
       base_url: "",
-      resend_key_set: false
+      resend_key_set: false,
+      tutor_provider: "anthropic",
+      tutor_model: "",
+      anthropic_key_set: false,
+      openai_key_set: false
     });
   });
 

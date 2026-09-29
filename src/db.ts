@@ -20,6 +20,7 @@ export type EventRow = {
 };
 
 import type { SchedFields } from "./scheduler";
+import type { TutorProvider } from "./tutor/types";
 
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -88,6 +89,12 @@ export type AppSettings = {
   base_url: string;
   /** True when a Resend API key is stored in D1 (value never returned). */
   resend_key_set: boolean;
+  /** Prompt tutor (Evolve). Provider defaults to anthropic; empty model = provider default. */
+  tutor_provider: TutorProvider;
+  tutor_model: string;
+  /** True when the corresponding tutor API key is stored in D1 (values never returned). */
+  anthropic_key_set: boolean;
+  openai_key_set: boolean;
 };
 
 /** Scheduler / reminder fields safe to put in export.zip (no secrets, no host URL). */
@@ -106,6 +113,8 @@ export async function getSettings(db: D1Database): Promise<AppSettings> {
   const rows = await db.prepare("SELECT key, value FROM settings").all<{ key: string; value: string }>();
   const map = new Map(rows.results.map(r => [r.key, r.value]));
   const resend = map.get("resend_api_key") ?? "";
+  const provider = map.get("tutor_provider");
+  const tutorProvider: TutorProvider = provider === "openai" ? "openai" : "anthropic";
   return {
     session_cap: parseInt(map.get("session_cap") ?? "20", 10),
     desired_retention: parseFloat(map.get("desired_retention") ?? "0.9"),
@@ -113,7 +122,11 @@ export async function getSettings(db: D1Database): Promise<AppSettings> {
     timezone: map.get("timezone") ?? "America/Los_Angeles",
     email_to: map.get("email_to") ?? "",
     base_url: map.get("base_url") ?? "",
-    resend_key_set: resend.length > 0
+    resend_key_set: resend.length > 0,
+    tutor_provider: tutorProvider,
+    tutor_model: map.get("tutor_model") ?? "",
+    anthropic_key_set: (map.get("anthropic_api_key") ?? "").length > 0,
+    openai_key_set: (map.get("openai_api_key") ?? "").length > 0
   };
 }
 

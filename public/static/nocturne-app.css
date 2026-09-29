@@ -437,3 +437,38 @@ body.wide .content { max-width: 1040px; }
 }
 .login-alt summary:hover { color: var(--color-accent); }
 .login-alt .login-form { margin-top: var(--space-3); }
+
+/* Evolve */
+/* ── evolve: tutor session (routes/evolve.ts, evolve.js) ───────────── */
+.evo-context .card-kicker { margin-bottom: var(--space-1); }
+.evo-context-q, .evo-context-a { font-size: 15px; line-height: 1.5; }
+.evo-context-q > :first-child, .evo-context-a > :first-child { margin-top: 0; }
+.evo-context-q > :last-child, .evo-context-a > :last-child { margin-bottom: 0; }
+.evo-context .session-divider { margin: var(--space-2) 0; }
+.evo-source a { color: inherit; }
+.evo-thread { display: flex; flex-direction: column; gap: var(--space-4); max-width: 640px; }
+.evo-msg { font-size: 15px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.evo-assistant { color: var(--color-text); }
+.evo-user {
+  align-self: flex-end; max-width: 85%;
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+.evo-status { font-size: 12px; color: color-mix(in srgb, var(--color-text) 48%, transparent); }
+.evo-error { color: var(--color-accent-300); }
+.evo-proposal textarea.input { min-height: 72px; font-size: 14px; }
+.evo-proposal .field { display: flex; flex-direction: column; }
+.evo-proposal .field > label { font-size: 11px; }
+.evo-rationale { line-height: 1.4; }
+.evo-actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.evo-actions .btn[hidden] { display: none; }
+.evo-saved { font-size: 13px; color: color-mix(in srgb, var(--color-text) 60%, transparent); }
+.evo-discarded { font-size: 13px; color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+.evo-fate .context-text { font-size: 14px; }
+.evo-worth { display: flex; flex-direction: column; gap: var(--space-2); }
+.evo-worth-q { margin: 0; font-size: 14px; color: color-mix(in srgb, var(--color-text) 70%, transparent); }
+.evo-close { display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-start; padding-top: var(--space-4); }
+.evo-close-line { margin: 0; font-size: 15px; line-height: 1.5; }
+.evo-composer { display: flex; flex-direction: column; gap: var(--space-3); max-width: 640px; margin-top: var(--space-6); }
+.evo-composer[hidden] { display: none; }
+.evo-composer textarea.input { min-height: 64px; }

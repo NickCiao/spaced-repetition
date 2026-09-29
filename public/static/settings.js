@@ -238,22 +238,47 @@
     setMode(pendingSwitchMode, { keepFile: true });
   });
 
-  document.getElementById("settings-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const body = {
+  const providerSelect = document.getElementById("tutor_provider");
+  const modelInput = document.getElementById("tutor_model");
+
+  function syncModelPlaceholder() {
+    const opt = providerSelect.selectedOptions[0];
+    if (opt && opt.dataset.defaultModel) modelInput.placeholder = opt.dataset.defaultModel;
+  }
+  providerSelect.addEventListener("change", syncModelPlaceholder);
+  syncModelPlaceholder();
+
+  /** Non-secret fields shared by Save and every Clear button. */
+  function settingsBody() {
+    return {
       session_cap: parseInt(document.getElementById("session_cap").value, 10),
       desired_retention: parseFloat(document.getElementById("desired_retention").value),
       email_hour: parseInt(document.getElementById("email_hour").value, 10),
       timezone: document.getElementById("timezone").value.trim(),
       email_to: document.getElementById("email_to").value.trim(),
       base_url: document.getElementById("base_url").value.trim(),
-      resend_api_key: document.getElementById("resend_api_key").value,
+      tutor_provider: providerSelect.value,
+      tutor_model: modelInput.value.trim(),
     };
-    const res = await fetch("/api/settings", {
+  }
+
+  async function postSettings(body) {
+    return fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+  }
+
+  document.getElementById("settings-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const body = {
+      ...settingsBody(),
+      resend_api_key: document.getElementById("resend_api_key").value,
+      anthropic_api_key: document.getElementById("anthropic_api_key").value,
+      openai_api_key: document.getElementById("openai_api_key").value,
+    };
+    const res = await postSettings(body);
     const flash = document.getElementById("flash");
     if (res.ok) {
       flash.textContent = "Saved ✓";
@@ -263,24 +288,16 @@
     }
   });
 
-  document.getElementById("clear-resend").addEventListener("click", async () => {
-    const body = {
-      session_cap: parseInt(document.getElementById("session_cap").value, 10),
-      desired_retention: parseFloat(document.getElementById("desired_retention").value),
-      email_hour: parseInt(document.getElementById("email_hour").value, 10),
-      timezone: document.getElementById("timezone").value.trim(),
-      email_to: document.getElementById("email_to").value.trim(),
-      base_url: document.getElementById("base_url").value.trim(),
-      clear_resend_api_key: true,
-    };
-    const res = await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+  function bindClear(buttonId, clearFlag, message) {
+    document.getElementById(buttonId).addEventListener("click", async () => {
+      const res = await postSettings({ ...settingsBody(), [clearFlag]: true });
+      document.getElementById("flash").textContent = res.ok ? message : (await res.json()).error;
+      if (res.ok) location.reload();
     });
-    document.getElementById("flash").textContent = res.ok ? "API key cleared" : (await res.json()).error;
-    if (res.ok) location.reload();
-  });
+  }
+  bindClear("clear-resend", "clear_resend_api_key", "API key cleared");
+  bindClear("clear-anthropic", "clear_anthropic_api_key", "Anthropic key cleared");
+  bindClear("clear-openai", "clear_openai_api_key", "OpenAI key cleared");
 
   document.getElementById("import-form").addEventListener("submit", async (e) => {
     e.preventDefault();

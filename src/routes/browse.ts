@@ -258,6 +258,8 @@ ${flagCard}
 <div id="preview"></div>
 </div>
 ${p ? `<div class="danger">
+  <a class="btn btn-secondary" id="evolve-prompt" href="/evolve/${p.id}"><i class="ph ph-sparkle"></i> Evolve</a>
+  <p class="danger-note">Talk it over with the tutor: find gaps, get follow-on prompts, decide whether to keep it.</p>
   <button type="button" class="btn btn-secondary" id="retire-prompt" data-retired="${p.retired ? "1" : "0"}">${p.retired ? "Restore to review" : "Retire"}</button>
   <p class="danger-note" id="retire-note">${p.retired ? "Retired: hidden from review. Restoring keeps its schedule and history." : "Hides this prompt from review. Recoverable: its schedule and history are kept."}</p>
   <button type="button" class="btn btn-secondary" id="delete-prompt">Delete permanently</button>

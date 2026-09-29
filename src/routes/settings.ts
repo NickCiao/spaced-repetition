@@ -2,6 +2,26 @@ import type { Env } from "../env.d";
 import { hourLabel, timeZoneOptions, timeZoneRegions } from "../clock";
 import { getSettings, setSetting } from "../db";
 import { escapeHtml, page, shellFor } from "../html";
+import { TUTOR_DEFAULT_MODEL, type TutorProvider } from "../tutor/types";
+
+const TUTOR_PROVIDERS: readonly TutorProvider[] = ["anthropic", "openai"];
+const TUTOR_PROVIDER_LABEL: Record<TutorProvider, string> = { anthropic: "Anthropic", openai: "OpenAI" };
+
+function isTutorProvider(v: unknown): v is TutorProvider {
+  return typeof v === "string" && (TUTOR_PROVIDERS as readonly string[]).includes(v);
+}
+
+function providerSelect(selected: TutorProvider): string {
+  const options = TUTOR_PROVIDERS.map(p => {
+    const sel = p === selected ? " selected" : "";
+    return `<option value="${p}" data-default-model="${escapeHtml(TUTOR_DEFAULT_MODEL[p])}"${sel}>${TUTOR_PROVIDER_LABEL[p]}</option>`;
+  }).join("");
+  return selectWrap("tutor_provider", options);
+}
+
+function secretKeyHint(isSet: boolean, whenUnset: string): string {
+  return isSet ? "Key is set — leave blank to keep, or paste a new one to replace." : whenUnset;
+}
 
 function selectWrap(id: string, options: string): string {
   return `<div class="select-wrap">
@@ -60,9 +80,21 @@ export async function settingsPage(env: Env): Promise<Response> {
     <div class="field"><label for="resend_api_key">Resend API key</label><input class="input" type="password" id="resend_api_key" value="" placeholder="${s.resend_key_set ? "••••••••" : "re_…"}" autocomplete="off"><p class="field-hint">${keyHint}</p></div>
   </div>
   <div class="field"><label for="base_url">App URL</label><input class="input" type="url" id="base_url" value="${escapeHtml(s.base_url)}" placeholder="https://…workers.dev"><p class="field-hint">Auto-filled on first visit; override if you use a custom domain. Used as the link in reminder emails.</p></div>
+  <h6 class="kicker">Tutor</h6>
+  <div class="form-grid">
+    <div class="field"><label for="tutor_provider">Provider</label>${providerSelect(s.tutor_provider)}</div>
+    <div class="field"><label for="tutor_model">Model</label><input class="input" type="text" id="tutor_model" value="${escapeHtml(s.tutor_model)}" placeholder="${escapeHtml(TUTOR_DEFAULT_MODEL[s.tutor_provider])}" maxlength="100" autocomplete="off"><p class="field-hint">Leave blank for the provider default (${TUTOR_DEFAULT_MODEL.anthropic} / ${TUTOR_DEFAULT_MODEL.openai}).</p></div>
+  </div>
+  <div class="form-grid">
+    <div class="field"><label for="anthropic_api_key">Anthropic API key</label><input class="input" type="password" id="anthropic_api_key" value="" placeholder="${s.anthropic_key_set ? "••••••••" : "sk-ant-…"}" autocomplete="off"><p class="field-hint">${secretKeyHint(s.anthropic_key_set, "From console.anthropic.com. Needed when Provider is Anthropic.")}</p></div>
+    <div class="field"><label for="openai_api_key">OpenAI API key</label><input class="input" type="password" id="openai_api_key" value="" placeholder="${s.openai_key_set ? "••••••••" : "sk-…"}" autocomplete="off"><p class="field-hint">${secretKeyHint(s.openai_key_set, "From platform.openai.com. Needed when Provider is OpenAI.")}</p></div>
+  </div>
+  <p class="field-hint">Used only by Evolve (the prompt tutor). Keys are stored in D1 and never exported.</p>
   <div class="form-actions">
     <button type="submit" class="btn btn-primary">Save</button>
     <button type="button" class="btn btn-ghost" id="clear-resend" ${s.resend_key_set ? "" : "hidden"}>Clear API key</button>
+    <button type="button" class="btn btn-ghost" id="clear-anthropic" ${s.anthropic_key_set ? "" : "hidden"}>Clear Anthropic key</button>
+    <button type="button" class="btn btn-ghost" id="clear-openai" ${s.openai_key_set ? "" : "hidden"}>Clear OpenAI key</button>
     <span class="flash" id="flash"></span>
   </div>
 </form>
@@ -133,6 +165,12 @@ export async function settingsApi(request: Request, env: Env): Promise<Response>
     resend_api_key?: string;
     clear_resend_api_key?: boolean;
     base_url?: string;
+    tutor_provider?: string;
+    tutor_model?: string;
+    anthropic_api_key?: string;
+    clear_anthropic_api_key?: boolean;
+    openai_api_key?: string;
+    clear_openai_api_key?: boolean;
   }>().catch(() => null);
   if (!b) return Response.json({ error: "bad body" }, { status: 400 });
   if (!Number.isInteger(b.session_cap) || b.session_cap! < 1 || b.session_cap! > 100)
@@ -154,6 +192,22 @@ export async function settingsApi(request: Request, env: Env): Promise<Response>
   if (baseUrl && !isHttpUrl(baseUrl))
     return Response.json({ error: "base_url must be an http(s) URL" }, { status: 400 });
 
+  // Tutor fields are optional so pre-existing clients (and tests) that omit them keep working.
+  let tutorProvider: TutorProvider | undefined;
+  if (b.tutor_provider !== undefined) {
+    if (!isTutorProvider(b.tutor_provider))
+      return Response.json({ error: "tutor_provider must be anthropic or openai" }, { status: 400 });
+    tutorProvider = b.tutor_provider;
+  }
+  let tutorModel: string | undefined;
+  if (b.tutor_model !== undefined) {
+    if (typeof b.tutor_model !== "string")
+      return Response.json({ error: "tutor_model must be a string" }, { status: 400 });
+    tutorModel = b.tutor_model.trim();
+    if (tutorModel.length > 100)
+      return Response.json({ error: "tutor_model must be at most 100 characters" }, { status: 400 });
+  }
+
   await setSetting(env.DB, "session_cap", String(b.session_cap));
   await setSetting(env.DB, "desired_retention", String(b.desired_retention));
   await setSetting(env.DB, "email_hour", String(b.email_hour));
@@ -165,6 +219,21 @@ export async function settingsApi(request: Request, env: Env): Promise<Response>
     await setSetting(env.DB, "resend_api_key", "");
   } else if (typeof b.resend_api_key === "string" && b.resend_api_key.trim()) {
     await setSetting(env.DB, "resend_api_key", b.resend_api_key.trim());
+  }
+
+  if (tutorProvider) await setSetting(env.DB, "tutor_provider", tutorProvider);
+  if (tutorModel !== undefined) await setSetting(env.DB, "tutor_model", tutorModel);
+
+  if (b.clear_anthropic_api_key) {
+    await setSetting(env.DB, "anthropic_api_key", "");
+  } else if (typeof b.anthropic_api_key === "string" && b.anthropic_api_key.trim()) {
+    await setSetting(env.DB, "anthropic_api_key", b.anthropic_api_key.trim());
+  }
+
+  if (b.clear_openai_api_key) {
+    await setSetting(env.DB, "openai_api_key", "");
+  } else if (typeof b.openai_api_key === "string" && b.openai_api_key.trim()) {
+    await setSetting(env.DB, "openai_api_key", b.openai_api_key.trim());
   }
 
   return Response.json({ ok: true });
