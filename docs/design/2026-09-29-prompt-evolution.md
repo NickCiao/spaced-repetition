@@ -12,33 +12,39 @@ The product of a session is the **insight**, not the cards. If you leave with a 
 
 Scope is deliberately one thing: make that session feel worth its minutes. Entry is manual. No triggers, no inbox integration, no lineage UI. Those are easy to add once the session itself has earned them, and worthless if it hasn't.
 
-## 2. Why a tutor, not a checklist
+## 2. The tutor's object of attention is the mental model, not the card
 
-A static list of moves ("ask it from the other direction", "one-sentence compression") can't do the two things that make a teacher valuable at this moment:
+A prompt is a fragment of a larger mental model. "What does Raft use to detect a stale leader?" is one shard of a model of how a cluster agrees on a leader without a shared clock. The tutor's job is to **infer what model this prompt belongs to — from the card, its neighbours, its history, and what you say — find where that model is thin, missing, or wrong, and let the evolution address those gaps.**
 
-- **Test transfer.** Put the idea in a situation the card never mentioned and see whether you can use it. Recognition of the card tells you nothing about this; a probe does.
-- **Ground proposals in what just happened.** "You hesitated on when heartbeats fail — so here's an *apply* prompt about exactly that." A proposal that cites your own stumble is one you take seriously; a generic one you nod at and delete (Nielsen's footnote: people discount suggestions they believe come from a model — grounding in *your* data is the counter).
+This is why it is a tutor and not a checklist, and why the tutor is given judgment rather than a script. A static list of moves ("ask it from the other direction", "one-sentence compression") or a rule like "facts get a *why* probe" produces something competent, predictable, and — after five sessions — boring. Different prompts want entirely different sessions:
 
-Both require an agent that reads your deck and your history, so the tutor is agentic: it decides what context to pull and drafts through tools. Writes to your prompts stay gated by you.
+- a card whose model you clearly hold, where the honest outcome is *retire*: the cue has done its work and the fact has dissolved into understanding;
+- a card that is fine but sits next to a hole — the gap is three cards away, and the session is mostly proposals;
+- a card where one transfer question exposes that you can recite it and cannot use it, and the evolution is about that;
+- a card that is badly written — canonical answer, yes/no shape, vague cue — where the right move is an edit and nothing else.
+
+What a checklist cannot do and a tutor can: **test whether the model is usable** (a situation the card never mentioned), and **ground every proposal in something specific** — your stumble, a neighbour that stops short, a gap it can name. A proposal that cites your own words is one you take seriously; a generic one you nod at and delete (Nielsen's footnote: people discount suggestions they believe come from a model — grounding in *your* data is the counter).
+
+The tutor is agentic so it can do that reading itself: it decides what context to pull and drafts through tools. Writes to your prompts stay gated by you.
 
 ## 3. The session
 
-`GET /evolve/:id`, reached from an **Evolve** button in the prompt editor footer (`/prompt/:id`). One page, one conversation, streamed. Five beats, each skippable:
+`GET /evolve/:id`, reached from an **Evolve** button in the prompt editor footer (`/prompt/:id`). One page, one conversation, streamed. The page gives the session a shape — five beats — but the beats are affordances, not a script: the tutor decides how much of each a given prompt needs, and may collapse or skip any of them.
 
-**1 · Orientation.** Before asking anything, the tutor shows it has done its reading: the review history in one line ("14 reviews since March 2025, one lapse last November, next due in five months"), what the topic's neighbouring prompts already cover, and what they don't. Then the first real question: *is this still worth carrying?* Retire is a first-class outcome, offered with reasons, before any elaboration.
+**Orientation.** The tutor speaks first and shows it has done its reading: history in a line ("14 reviews since March 2025, one lapse last November, next due in five months"), what the neighbouring prompts cover, and — its own inference — what model this card seems to be part of and where that model looks thin. Then the honest question: *is this still worth carrying?* Retire is a first-class outcome, offered with reasons, before any elaboration.
 
-**2 · Probe.** One to three exchanges, chosen for the kind of prompt: a fact gets *why* / *when does this matter*; a concept gets a *boundary* or *contrast* ("what does this look like when it's almost-but-not X?"); a procedure gets a *failure mode*. Always at least one transfer probe — a concrete situation the card never mentioned. Short answers from you; the tutor does not lecture. **Skip to proposals** is visible throughout.
+**Probe.** As many exchanges as the tutor judges it needs to locate the gap — often one, sometimes three, sometimes none. Usually at least one situation the card never mentioned, because that is the test recognition can't pass. Short answers from you; the tutor does not lecture. **Skip to proposals** is visible throughout.
 
-**3 · Diagnosis.** The tutor says what it noticed, specifically: where your account matched the card, where it drifted, what you reached for that the card doesn't test. This is the "memory coach" beat and the most valuable one; it is delivered even if you skipped the probes (then it is a critique of the card itself — vague cue, canonical answer, yes/no shape).
+**Diagnosis.** What it found, specifically: the model it thinks you hold, where that matched the card, where it drifted, what you reached for that nothing tests, where the neighbours stop short. This is the "memory coach" beat and the most valuable one; it is delivered even when the probes were skipped (then it is what can be inferred from the card and its neighbours alone).
 
-**4 · Proposals.** Two to four, never more than five. Each is one of:
+**Proposals.** As many as the gaps warrant — usually two to four, never more than five, sometimes none. Each is one of:
 
-- a **new prompt** (Q/A or cloze) with a **move** — `reframe` · `deepen` · `compress` · `connect` · `apply` · `second-answer` — and a one-line rationale that points back at the probe or the diagnosis;
+- a **new prompt** (Q/A or cloze) with a one-line rationale naming the gap it closes and pointing at what in the session revealed it. A **move** tag — `reframe` · `deepen` · `compress` · `connect` · `apply` · `second-answer` · `other` — is attached for the experiment's bookkeeping (§9), not as a menu the tutor must pick from;
 - an **edit to the original** — reworded cue, a second answer added, a weasel-word removed. Edits keep the prompt's identity and FSRS history (the design doc's rule: identity survives rewording).
 
 Proposals render as editable cards inside the session. You change the wording (this is where the encoding still happens), then **Accept** or **Discard**. Accept writes immediately: a new prompt lands in the same topic with fresh FSRS state and the parent's source line; an edit updates the original in place. Nothing is written without an Accept. Closing the page discards whatever is still open.
 
-**5 · Fate.** The tutor recommends *keep* or *retire* for the original, with one line of reasoning. One tap either way; retire uses the existing path and event. Then a single private question for the experiment's sake — *worth the minutes?* yes / no — stored in the session log, never shown anywhere.
+**Fate.** The tutor recommends *keep* or *retire* for the original, with one line of reasoning. One tap either way; retire uses the existing path and event. Then a single private question for the experiment's sake — *worth the minutes?* yes / no — stored in the session log, never shown anywhere.
 
 A typical session: two to four minutes. Latency is part of value: assistant text streams; tool activity shows as a quiet status line ("reading topic…") rather than a spinner.
 
@@ -65,7 +71,7 @@ Write tools (all gated — they create *proposals*, not prompts):
 
 The user's Accept on a card is what calls the real write (`insertPromptStmt`, `UPDATE prompts`, `retire`) — from a normal authenticated endpoint, not from the model.
 
-The tutor's brief (system prompt), in short: read before speaking; open with orientation; offer retire honestly; probe transfer, don't quiz; diagnose specifically; prefer specific questions with specific answers, prefer "two different ways" over canonical answers, never yes/no; never duplicate a sibling; every proposal cites something from this conversation or from the card's own weaknesses; stop at five; be brief. The brief lives in `src/tutor/brief.ts` and is expected to change more than any other file on this branch.
+The tutor's brief (system prompt) states the job and the constraints, not a procedure. The job: infer the mental model this prompt is part of, find where it is thin or wrong, and evolve toward closing those gaps — through retire, edits, new prompts, or simply telling the user what you found. The constraints, in short: read before speaking; offer retire honestly; probe only as much as it takes to locate the gap; don't lecture; diagnose specifically; every proposal names the gap it closes and what revealed it; never duplicate a sibling; prefer specific questions with specific answers and "two different ways" over canonical answers, avoid yes/no; at most five proposals; be brief. Everything about *how* — which probe, how many, which moves — is the tutor's call. The brief lives in `src/tutor/brief.ts` and is expected to change more than any other file on this branch.
 
 ## 5. State
 
