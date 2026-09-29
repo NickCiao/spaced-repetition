@@ -22,7 +22,7 @@ Single-user spaced-repetition app: capture → refine → review → export/impo
 - Import: dry-run by default; reject whole zip on parse errors.
 - Runtime deps: `ts-fsrs`, `marked`, `katex`, `fflate` only. Ask before adding anything.
 
-**Branch `feature/prompt-evolution` only** (design: `docs/design/2026-09-29-prompt-evolution.md`): the AI tutor may generate prompts and act via tools (curation at refine is what's preserved); runtime deps also allow `ai`, `@ai-sdk/anthropic`, `@ai-sdk/openai`, `zod`. **No migrations on this branch** — it must stay deployable over `main` and roll back by redeploying `main`; new state goes in `settings` rows, `captures`, or R2 under `evolve/`. Lineage is the `settings.lineage` JSON ledger, not a column. Re-decide all of this before merging.
+**Branch `feature/prompt-evolution` only** (design: `docs/design/2026-09-29-prompt-evolution.md`): the AI tutor may generate prompts and act via tools (curation at refine is what's preserved); runtime deps also allow `ai`, `@ai-sdk/anthropic`, `@ai-sdk/openai`, `zod`. **No migrations on this branch** — it must stay deployable over `main` and roll back by redeploying `main`; new state goes in `settings` rows or R2 under `evolve/`. Lineage is the `settings.lineage` JSON ledger, not a column. Tutor writes to `prompts` only through user-gated Accept endpoints, never from the model loop. Re-decide all of this before merging.
 
 **Dev:** `npm run migrate:local` · copy `.dev.vars.example` → `.dev.vars` and set `SR_TOKEN=devtoken` · `npm run dev` · `/?token=devtoken` · first-time prod: `npm run setup` or Deploy to Cloudflare button · ops in README
 **Test:** `npm test`. Route tests use `exports.default.fetch` + auth/wipe helpers from `test/helpers.ts`.

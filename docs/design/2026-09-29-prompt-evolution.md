@@ -1,127 +1,120 @@
-# Prompt evolution — an AI tutor for prompts that have stuck
+# Prompt evolution — a tutor session for a prompt that has stuck
 
-**Status**: Experiment on branch `feature/prompt-evolution` · 2026-09-29
+**Status**: Experiment on branch `feature/prompt-evolution` · 2026-09-29 (rewritten same day; supersedes the first draft)
 
-Extends `2026-08-20-spaced-repetition-design.md`. Replaces its §11 *progressive memory prompts* direction (pre-authored stages) with a just-in-time model, and — **on this branch only** — relaxes two of its rules: the tool may generate and act, not just scaffold; and the runtime dependency list grows by the Vercel AI SDK. Both relaxations are recorded in `AGENTS.md` under the branch note and must be re-decided before any merge to `main`.
+Extends `2026-08-20-spaced-repetition-design.md` and replaces its §11 *progressive memory prompts* direction. **On this branch only**, two of its rules are relaxed: the tool may generate prompts and act through tools, and the runtime dependency list grows by the Vercel AI SDK. Recorded in `AGENTS.md`; re-decide before any merge.
 
-## 1. Problem
+## 1. What this is
 
-Once a prompt has stabilized (FSRS intervals of months), review offers only keep or retire. A kept prompt fossilizes: the cue is the exact wording, so success comes to mean *recognizing the card*, not *having the idea available in thought*. Nielsen names this directly — Anki's "cues don't correspond to actual situations of use" — and his memorization notes add the mirror case: a lapse on a mature card "was usually not a failure of memory so much as a failure to understand."
+You pick a prompt you already know well. A tutor that has read your deck spends a few minutes with you on it: shows what it noticed, tests whether you can *use* the idea rather than recognize the card, tells you what it found, and drafts a small number of follow-on prompts — each tied to something that happened in the conversation. You edit and accept the ones worth keeping, decide what happens to the original, and leave.
 
-A teacher, at the moment a concept has clearly stuck, does one of a few things: re-frames it from another angle, deepens into adjacent material, asks for a compression, connects it to something else, or asks for an application. Only the first modifies the existing prompt; the rest author *new* prompts with the old one as source material.
+The product of a session is the **insight**, not the cards. If you leave with a sharper sense of what you actually understand and accept zero proposals, the session worked. Cards are the residue that makes the insight durable.
 
-The design doc's §11 imagined pre-authored stages written at refine time. That is the moment the author understands the material *least*. This design evolves prompts **after** they stick, when understanding is greatest and adjacent reading has accumulated.
+Scope is deliberately one thing: make that session feel worth its minutes. Entry is manual. No triggers, no inbox integration, no lineage UI. Those are easy to add once the session itself has earned them, and worthless if it hasn't.
 
-## 2. What stays true
+## 2. Why a tutor, not a checklist
 
-- **Curation stays human.** The tutor proposes — as captures — and nothing enters review until refined. Deleting a proposal at refine is legitimate triage and is the experiment's primary signal.
-- **Retire is a first-class outcome.** The tutor's first question is whether the idea is still worth carrying. Elaborating things one feels one *should* care about is the failure mode Nielsen warns about most.
-- **No metrics.** No mastery levels. The only new number shown is one already permitted — when the next review lands.
-- **Bounded.** Evolve is pull (manual from Browse or the review overflow) plus one quiet affordance in review. Nothing accumulates unattended; no inbox item is created without an explicit action.
-- **Binary grades, deterministic FSRS, event-log replay** — untouched. Evolution never edits FSRS state; a re-framed prompt is a new card with fresh state and a lineage edge, and the parent is kept or retired through the existing `retire` path.
+A static list of moves ("ask it from the other direction", "one-sentence compression") can't do the two things that make a teacher valuable at this moment:
 
-## 3. The moment
+- **Test transfer.** Put the idea in a situation the card never mentioned and see whether you can use it. Recognition of the card tells you nothing about this; a probe does.
+- **Ground proposals in what just happened.** "You hesitated on when heartbeats fail — so here's an *apply* prompt about exactly that." A proposal that cites your own stumble is one you take seriously; a generic one you nod at and delete (Nielsen's footnote: people discount suggestions they believe come from a model — grounding in *your* data is the counter).
 
-Two triggers, computed in `POST /api/grade` from the prompt's pre- and post-grade FSRS fields and returned as `evolvable: true` (nothing stored):
+Both require an agent that reads your deck and your history, so the tutor is agentic: it decides what context to pull and drafts through tools. Writes to your prompts stay gated by you.
 
-| Grade | Condition | Reading |
-|---|---|---|
-| Remembered | `scheduled_days` after grading ≥ 90 | It has stuck; you won't see it for a season |
-| Forgot | `stability` before grading ≥ 90 days | A mature card lapsed; the cue was shallow |
+## 3. The session
 
-When `evolvable`, the post-grade footer shows the existing "Next: {weekday}" line with a quiet `Evolve` link beside it. `Evolve` is also always available from the review overflow (Skip · Flag · Retire · **Evolve**) and from the prompt editor footer, so iteration on the tutor does not wait for cards to mature.
+`GET /evolve/:id`, reached from an **Evolve** button in the prompt editor footer (`/prompt/:id`). One page, one conversation, streamed. Five beats, each skippable:
 
-## 4. The tutor
+**1 · Orientation.** Before asking anything, the tutor shows it has done its reading: the review history in one line ("14 reviews since March 2025, one lapse last November, next due in five months"), what the topic's neighbouring prompts already cover, and what they don't. Then the first real question: *is this still worth carrying?* Retire is a first-class outcome, offered with reasons, before any elaboration.
 
-An agent loop over the Vercel AI SDK (`ai@^7`, `@ai-sdk/anthropic@^4`, `@ai-sdk/openai@^4`, `zod`), run inside the Worker request, provider chosen in Settings. Default models: `claude-opus-5-5` (Anthropic), `gpt-6-astra` (OpenAI; `gpt-6-sol` if the key lacks access). Model ids are settings, not code.
+**2 · Probe.** One to three exchanges, chosen for the kind of prompt: a fact gets *why* / *when does this matter*; a concept gets a *boundary* or *contrast* ("what does this look like when it's almost-but-not X?"); a procedure gets a *failure mode*. Always at least one transfer probe — a concrete situation the card never mentioned. Short answers from you; the tutor does not lecture. **Skip to proposals** is visible throughout.
 
-Two levels, both available from the same page so they can be compared:
+**3 · Diagnosis.** The tutor says what it noticed, specifically: where your account matched the card, where it drifted, what you reached for that the card doesn't test. This is the "memory coach" beat and the most valuable one; it is delivered even if you skipped the probes (then it is a critique of the card itself — vague cue, canonical answer, yes/no shape).
 
-- **Probe → propose** (default). The tutor first tests transfer — explain it in your own words; apply it to a situation the card never mentioned; what does it contrast with — then proposes prompts aimed at where you stumbled.
-- **Propose directly** ("skip the questions"). Drafts candidates from the card and its context without a dialogue.
+**4 · Proposals.** Two to four, never more than five. Each is one of:
 
-Tools the tutor can call (all read from D1 or write captures; none touch prompts or FSRS state):
+- a **new prompt** (Q/A or cloze) with a **move** — `reframe` · `deepen` · `compress` · `connect` · `apply` · `second-answer` — and a one-line rationale that points back at the probe or the diagnosis;
+- an **edit to the original** — reworded cue, a second answer added, a weasel-word removed. Edits keep the prompt's identity and FSRS history (the design doc's rule: identity survives rewording).
 
-| Tool | Does |
+Proposals render as editable cards inside the session. You change the wording (this is where the encoding still happens), then **Accept** or **Discard**. Accept writes immediately: a new prompt lands in the same topic with fresh FSRS state and the parent's source line; an edit updates the original in place. Nothing is written without an Accept. Closing the page discards whatever is still open.
+
+**5 · Fate.** The tutor recommends *keep* or *retire* for the original, with one line of reasoning. One tap either way; retire uses the existing path and event. Then a single private question for the experiment's sake — *worth the minutes?* yes / no — stored in the session log, never shown anywhere.
+
+A typical session: two to four minutes. Latency is part of value: assistant text streams; tool activity shows as a quiet status line ("reading topic…") rather than a spinner.
+
+## 4. The agent
+
+Vercel AI SDK 7 (`ai`, `@ai-sdk/anthropic`, `@ai-sdk/openai`, `zod`), `streamText` with tools and `stopWhen`, run inside the Worker request. Provider and model from Settings; defaults `claude-opus-5-5` and `gpt-6-astra`.
+
+Read tools (D1, unrestricted):
+
+| Tool | Returns |
 |---|---|
-| `read_prompt` | The prompt, its topic, source line, and lineage (ancestors, children) |
-| `read_topic_siblings` | Other prompts in the topic, so it knows what is already covered |
-| `read_review_history` | The prompt's events — lapses, elapsed days, current interval |
-| `fetch_source` | The prompt's source URL, if any and if http(s), text-only |
-| `propose_prompt` | Writes a capture (see §5) tagged with a move; returns its id |
-| `recommend_parent_fate` | keep / retire / replace, with one line of reasoning, shown to the user for the refine step |
+| `read_prompt` | Question, answer, kind, topic, source line, prior sessions on this prompt (from the ledger, §6) |
+| `read_review_history` | The prompt's events with elapsed days; current stability and interval |
+| `read_topic_siblings` | Every other active prompt in the topic — so proposals never duplicate |
+| `fetch_source` | Text of the prompt's source URL when it is http(s); truncated |
 
-Every proposal carries a **move**: `reframe` · `deepen` · `compress` · `connect` · `apply` · `second-answer`. The tag is what makes the kept-vs-deleted data say which moves earn their place.
+Write tools (all gated — they create *proposals*, not prompts):
 
-System prompt commitments (the tutor's brief): prefer specific questions with specific answers; avoid yes/no; prefer "two different ways…" over canonical answers; never propose a prompt about something the siblings already cover; cap proposals per session (default 5); ask whether the idea is still worth carrying before anything else; treat the user's stumbles as the primary source of proposals.
+| Tool | Effect |
+|---|---|
+| `propose_prompt` | A new-prompt card with kind, question, answer, move, rationale |
+| `propose_edit` | An edit card showing before/after for the original |
+| `recommend_fate` | keep / retire with reasoning; renders the fate control |
 
-Transcripts persist to R2 at `evolve/<prompt_id>/<session_id>.json` (messages, tool calls, proposals, fate recommendation). Not indexed in `assets`; not exported in v1.
+The user's Accept on a card is what calls the real write (`insertPromptStmt`, `UPDATE prompts`, `retire`) — from a normal authenticated endpoint, not from the model.
 
-## 5. Proposals are captures
+The tutor's brief (system prompt), in short: read before speaking; open with orientation; offer retire honestly; probe transfer, don't quiz; diagnose specifically; prefer specific questions with specific answers, prefer "two different ways" over canonical answers, never yes/no; never duplicate a sibling; every proposal cites something from this conversation or from the card's own weaknesses; stop at five; be brief. The brief lives in `src/tutor/brief.ts` and is expected to change more than any other file on this branch.
 
-`propose_prompt` inserts into `captures`:
+## 5. State
 
-- `text` — the proposal in interchange form: a `Q:`/`A:` block or a `C:` cloze block, parsed at refine with the existing `format.ts` block parser
-- `note` — `evolve:<move>:<parent_id>:<session_id>` (machine prefix; refine renders it as a lineage card, not as a note)
-- `topic` — the parent's topic name
-- `url`, `title`, `image_id` — null
+No migrations. Everything new lives in existing tables, R2, and code:
 
-Refine, on this branch, recognises the `evolve:` prefix: the context card shows the **parent prompt** (question, answer, source) instead of raw capture text; kind/question/answer are pre-filled from the block; the source input is pre-filled from the parent's `source` (same reading, same provenance); a **Parent** control offers *keep* (default) / *retire* with the tutor's recommendation shown beside it. On save, one lineage edge is appended per created prompt (§6) and, if chosen, the parent is retired through the existing retire path (existing `retire` event). On `main`, the same rows are ordinary captures — refinable, deletable, harmless.
+- **Session log** — R2 `evolve/<prompt_id>/<session_id>.json`: transcript, tool calls, each proposal with its move and outcome (accepted / edited-then-accepted / discarded), the fate choice, the worth-it answer, provider and model. This is the experiment's dataset. Each turn is `POST /api/evolve/:id/turn` with one user message (or a `skip` / `accept` / `discard` / `fate` action); the server loads the log, runs the loop, appends, persists, streams back.
+- **Settings** — `tutor_provider`, `tutor_model`, `anthropic_api_key`, `openai_api_key` in the `settings` table; keys handled like `resend_api_key` (never returned, never exported; UI shows set / not set). Settings page gains a **Tutor** section.
+- **Lineage ledger** — one `settings` row, key `lineage`, a JSON array of `{ child, parent, move, ts, session }` appended atomically with `json_insert` on each accepted new prompt. Read only by `read_prompt` so a later session on the same prompt knows what already grew from it. No UI. Promotion path when this graduates: an additive `prompts.parent_id` migration backfilled from the array.
 
-## 6. Lineage ledger (zero-schema)
+Rollback is `git checkout main && npm run deploy`. Left behind: inert settings rows, R2 objects under `evolve/`, and ordinary prompts that happen to have been written in a session.
 
-A `settings` row, key `lineage`, holding a JSON array of edges:
+## 6. Cut from the first draft, and why
 
-```json
-{ "child": "k3j9…", "parent": "a7f2…", "move": "reframe", "ts": "2026-10-03T14:02:11Z", "session": "evolve/a7f2…/s01…" }
-```
+| Cut | Reason |
+|---|---|
+| Review-time `evolvable` trigger and footer link | Entry point, not value. Manual entry from the editor is enough to iterate on the session |
+| `Evolve` in the review overflow | Same |
+| Proposals as inbox captures; refine pre-fill; parent control in refine | The best moment to edit a proposal is inside the session, while the concept is in hand. Round-tripping through the inbox added three surfaces and a delay for no gain |
+| Two tutor "levels" as separate modes | One flow with **Skip to proposals** covers the comparison |
+| Lineage in Browse; `lineage.jsonl` in export | Nothing reads it yet except the tutor |
 
-Appended atomically with `UPDATE settings SET value = json_insert(value, '$[#]', json(?)) WHERE key = 'lineage'` (row created on first use). `getSettings()` ignores the key; `exportableSettings()` excludes it. Export writes it as **`lineage.jsonl`** (one edge per line) so backups carry it and offline agents can read it; `import` on this branch restores it when present and `main`'s importer ignores the file. `read_prompt` and Browse read ancestors/children from it.
-
-This is deliberately temporary. Promotion path when the experiment graduates: one additive migration adding `prompts.parent_id` (nullable) and `prompts.move`, backfilled from the array; `<!-- id: …; parent: … -->` in the interchange format.
-
-## 7. Settings
-
-New keys, all in the existing `settings` table: `tutor_provider` (`anthropic` | `openai`), `tutor_model` (free text, provider default when blank), `anthropic_api_key`, `openai_api_key`. Keys are stored like `resend_api_key` — never returned to the client, never exported; the UI shows only *set / not set*. Settings page gains a **Tutor** section.
-
-## 8. Surfaces
-
-- **Review** — `evolvable` footer link; `Evolve` in the overflow.
-- **Evolve page** `GET /evolve/:id` — the prompt at top; a conversation with the tutor; proposals render as cards as they are written (each already in the Inbox); the fate recommendation at the end; *Skip the questions* switches to direct proposals. `POST /api/evolve/:id/turn` carries one user message; the server loads the transcript from R2, runs the loop, persists, returns the new assistant turn and any proposals.
-- **Inbox** — evolve captures show as "Evolve · reframe of: {parent question}" rows.
-- **Refine** — §5.
-- **Browse / prompt editor** — a *Lineage* block listing parent and children with their moves; `Evolve` in the footer.
-
-## 9. Deployability and rollback
-
-No migrations on this branch. Everything new lives in `settings` rows, `captures` rows, R2 objects under `evolve/`, and code. `npm run deploy` from the branch replaces the production Worker; `git checkout main && npm run deploy` rolls back, leaving behind only inert settings rows, ordinary captures, and unreferenced R2 objects. `events.action` has a `CHECK` constraint, so no new event action is introduced — adding one would require a table rebuild.
-
-## 10. Failure modes
+## 7. Failure modes
 
 | Failure | Behavior |
 |---|---|
-| Provider down / key invalid | Evolve page shows the error; review is never blocked on the tutor |
-| Tool loop runs long | `stopWhen` caps steps (default 12); proposals cap at 5 per session |
-| Proposal fails to parse at refine | Falls back to raw text in the question field; the capture is never lost |
-| `lineage` JSON corrupted | Appends fail loudly; Browse shows "lineage unavailable"; prompts and review unaffected |
-| Deploy of `main` over this branch | See §9 — nothing to undo |
+| Provider down or key invalid | The session page shows the error inline; nothing else in the app depends on the tutor |
+| Loop runs long | `stopWhen` caps steps (12); proposals cap at 5; streaming keeps the page alive |
+| Accept races a concurrent edit of the original | Edit proposals carry the `updated_at` they were drafted against; stale → rejected with "prompt changed, re-open" |
+| Session log write fails | Accepts still succeed (they write D1 first); the log is best-effort and says so |
 
-## 11. Testing
+## 8. Testing
 
-Pure logic first: trigger rule (`evolvable` from before/after fields), `evolve:` note parse/render, lineage append and read (against local D1 via the vitest pool), proposal block → refine pre-fill. The tutor loop is tested with a fake model (AI SDK's mock provider) asserting tool sequencing and the proposal cap; no network in tests.
+Pure first: proposal card → prompt input normalisation reuses `validatePromptInput` / `normalizePromptInput`; ledger append/read against local D1; the accept endpoint (new prompt, edit, retire) via `exports.default.fetch`. The agent loop runs against the AI SDK mock provider asserting tool sequencing, the proposal cap, and that no write tool ever touches `prompts`. No network in tests. The brief is not unit-tested; it is judged by sessions.
 
-## 12. What the experiment must answer
+## 9. What decides whether this graduates
 
-1. **Keep rate** — of proposals, how many survive refine and a week of honest review.
-2. **Probe vs. propose** — does the dialogue produce better-kept prompts, and is it worth the minutes.
-3. **Context** — card only / siblings / source text / lapse history: which changes the proposals.
-4. **Moves** — which tags survive; which the tutor should stop offering.
-5. **Rate** — evolutions per week before it feels like a treadmill.
-6. **Parent fate** — whether replacing feels right or both should stay live.
+After a few weeks of sessions, from the logs:
 
-## 13. References
+1. **Worth-it rate** — the yes/no at the end. The primary signal.
+2. **Keep rate** — accepted / proposed, and accepted-after-edit vs accepted-as-is.
+3. **Moves** — which tags get accepted; which get discarded on sight.
+4. **Probe vs skip** — whether sessions that ran the probes accept more, and whether you kept choosing to run them.
+5. **Retire rate** — how often the honest answer to "still worth carrying?" was no.
 
-- Nielsen, *Building a better memory system* — "we need to go deeper"; "pay for real testing"; memory coach; beware canonical answers; compress understanding.
-- Nielsen, *How I use memory systems* — the "should" warning; card-culling; a stance of improvement toward cards.
+If the worth-it rate is high, the next work is entry points (the review-time trigger from the first draft) and lineage promotion. If it is low, the brief and the probes are what to change — not the surfaces.
+
+## 10. References
+
+- Nielsen, *Building a better memory system* — "pay for real testing"; memory coach; "we need to go deeper"; beware canonical answers.
+- Nielsen, *How I use memory systems* — the "should" warning; a stance of improvement toward cards; Anki as a context to think in.
 - Nielsen, *Using memory systems to memorize text passages* — mistakes as a source of insight; understanding never saturates.
-- Vercel AI SDK 7 — `generateText`, `tools`, `stopWhen`.
+- Vercel AI SDK 7 — `streamText`, tools, `stopWhen`.
