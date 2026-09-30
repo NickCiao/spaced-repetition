@@ -165,7 +165,7 @@
          <div class="overflow">
            <a id="skip">Skip</a><a id="flag">Flag</a><a id="retire">Retire</a>
            <a id="delete">Delete</a>
-           <a href="/prompt/${esc(c.id)}">Edit</a>
+           <a href="/prompt/${esc(c.id)}?return=${esc(encodeURIComponent(sessionHref()))}">Edit</a>
          </div>
          <p class="session-hint">← forgot · remembered →</p>`
       : flagging ? ""

@@ -6,6 +6,8 @@
   const $ = (id) => document.getElementById(id);
   const originalTopicId = root.dataset.topicId;
   const originalTopicName = root.dataset.topicName || "";
+  // Set when opened from review: Save and Delete go back to the session instead of the topic.
+  const returnTo = root.dataset.return || "";
 
   const picker = window.topicPicker($("topic-picker"));
   picker.resolveInitial();
@@ -72,7 +74,7 @@
       const res = await fetch("/api/prompt", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
       });
-      if (res.ok) { location.href = "/browse/" + topicId; return; }
+      if (res.ok) { location.href = returnTo || "/browse/" + topicId; return; }
       flash.textContent = (await res.json()).error;
     } catch (err) {
       flash.textContent = err.message || "Save failed";
@@ -107,7 +109,7 @@
     del.onclick = async () => {
       if (!confirm("Delete this prompt permanently? Its review history will be gone and this cannot be undone.")) return;
       const res = await fetch(`/api/prompt/${$("pid").value}/delete`, { method: "POST" });
-      if (res.ok) location.href = "/browse/" + originalTopicId;
+      if (res.ok) location.href = returnTo || "/browse/" + originalTopicId;
       else $("flash").textContent = (await res.json()).error || "Delete failed";
     };
   }

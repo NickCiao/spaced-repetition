@@ -660,6 +660,32 @@ describe("browse, prompt edit, settings", () => {
     expect(unknown.status).toBe(404);
   });
 
+  it("prompt editor opened from review returns to the session; ?return= only accepts review urls", async () => {
+    const { id: tid } = await (await POST("/api/topic", { name: "Edit From Review" })).json() as { id: string };
+    const { id: pid } = await (await POST("/api/prompt", {
+      topic_id: tid, kind: "qa", question: "fix-me?", answer: "a"
+    })).json() as { id: string };
+    const form = async (ret: string) =>
+      (await exports.default.fetch(`http://sr/prompt/${pid}?return=${encodeURIComponent(ret)}`, AUTH)).text();
+
+    const plain = await (await exports.default.fetch(`http://sr/prompt/${pid}`, AUTH)).text();
+    expect(plain).not.toContain("data-return=");
+    expect(plain).toContain(`class="crumb" href="/browse/${tid}"`);
+
+    let html = await form(`/?ahead=1&topic=${tid}`);
+    expect(html).toContain(`data-return="/?ahead=1&amp;topic=${tid}"`);
+    expect(html).toContain(`class="crumb" href="/?ahead=1&amp;topic=${tid}"`);
+
+    html = await form("/?topic=x%22%3E%3Cscript%3E&junk=1");
+    expect(html).toContain('data-return="/"');
+
+    for (const evil of ["https://evil.example/", "//evil.example/", "/browse", "javascript:alert(1)"]) {
+      html = await form(evil);
+      expect(html).not.toContain("data-return=");
+      expect(html).not.toContain("evil.example");
+    }
+  });
+
   it("javascript: topic urls never render as links", async () => {
     const tid = newId();
     await env.DB.prepare("INSERT INTO topics (id, name, url, meta, created_at) VALUES (?, 'Sketchy', 'javascript:alert(1)', '{}', ?)")

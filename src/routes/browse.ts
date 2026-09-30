@@ -171,10 +171,26 @@ hide.onchange = () => {
   });
 }
 
+/** `?return=` is attacker-reachable: only a review session URL (`/`, optionally `ahead`/`topic`) is honoured. */
+export function reviewReturnHref(raw: string | null): string | null {
+  if (!raw) return null;
+  let u: URL;
+  try { u = new URL(raw, "http://sr"); } catch { return null; }
+  if (u.origin !== "http://sr" || u.pathname !== "/") return null;
+  const q = new URLSearchParams();
+  if (u.searchParams.get("ahead") === "1") q.set("ahead", "1");
+  const topic = u.searchParams.get("topic");
+  if (topic && /^[a-z0-9]{10}$/.test(topic)) q.set("topic", topic);
+  const s = q.toString();
+  return s ? `/?${s}` : "/";
+}
+
 export async function promptForm(idOrNew: string, request: Request, env: Env): Promise<Response> {
-  const shell = await shellFor(env.DB, "browse");
+  const url = new URL(request.url);
+  const returnTo = idOrNew === "new" ? null : reviewReturnHref(url.searchParams.get("return"));
+  const shell = await shellFor(env.DB, returnTo ? "review" : "browse");
   let p: PromptRow | null = null;
-  let topicId = new URL(request.url).searchParams.get("topic") ?? "";
+  let topicId = url.searchParams.get("topic") ?? "";
   let topicName = "";
   if (idOrNew !== "new") {
     p = await env.DB.prepare("SELECT * FROM prompts WHERE id = ?").bind(idOrNew).first<PromptRow>();
@@ -198,10 +214,12 @@ export async function promptForm(idOrNew: string, request: Request, env: Env): P
   <span class="card-meta">Saving clears the flag.</span>
 </div>` : "";
   const body = `
-<a class="crumb" href="/browse/${escapeHtml(topicId)}"><i class="ph ph-arrow-left"></i> ${escapeHtml(topicName)}</a>
+${returnTo
+    ? `<a class="crumb" href="${escapeHtml(returnTo)}"><i class="ph ph-arrow-left"></i> Review</a>`
+    : `<a class="crumb" href="/browse/${escapeHtml(topicId)}"><i class="ph ph-arrow-left"></i> ${escapeHtml(topicName)}</a>`}
 <h1 class="page-title">${p ? "Edit prompt" : "New prompt"}${p ? ` <span class="tag tag-neutral" id="retired-tag"${p.retired ? "" : " hidden"}>retired</span>` : ""}</h1>
 ${flagCard}
-<div class="editor-layout" id="prompt-editor" data-topic-id="${escapeHtml(topicId)}" data-topic-name="${escapeHtml(topicName)}">
+<div class="editor-layout" id="prompt-editor" data-topic-id="${escapeHtml(topicId)}" data-topic-name="${escapeHtml(topicName)}"${returnTo ? ` data-return="${escapeHtml(returnTo)}"` : ""}>
 <form class="form" id="prompt-form" method="post" action="/api/prompt">
   <input type="hidden" id="pid" value="${escapeHtml(p?.id ?? "")}">
   <input type="hidden" id="kind" value="${p?.kind === "cloze" ? "cloze" : "qa"}">
