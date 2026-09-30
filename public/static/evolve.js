@@ -10,6 +10,9 @@
   if (!root) return;
   const promptId = root.dataset.promptId;
   const api = (op) => `/api/evolve/${promptId}/${op}`;
+  // Review session to return to, already validated server-side (routes/evolve.ts); never read from location.
+  const returnTo = root.dataset.return || "";
+  const editorHref = (id) => `/prompt/${id}` + (returnTo ? `?return=${encodeURIComponent(returnTo)}` : "");
 
   let sessionId = null;
   let streaming = false;
@@ -141,7 +144,7 @@
         actions.replaceChildren(el("span", "evo-saved", "Saved ✓"));
         if (isNew && data.prompt_id) {
           const link = el("a", "btn btn-ghost", "Open prompt");
-          link.href = `/prompt/${data.prompt_id}`;
+          link.href = editorHref(data.prompt_id);
           actions.appendChild(link);
         }
       } catch (err) {
@@ -235,7 +238,7 @@
     const done = el("div", "evo-close");
     done.appendChild(el("p", "evo-close-line", "Done. Anything you accepted will surface in review in a few days."));
     const back = el("a", "btn btn-secondary", "Back to prompt");
-    back.href = `/prompt/${promptId}`;
+    back.href = editorHref(promptId);
     done.appendChild(back);
     thread.appendChild(done);
     composer.hidden = true;

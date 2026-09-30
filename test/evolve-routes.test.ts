@@ -114,6 +114,41 @@ describe("evolve: entry and page", () => {
     expect(html).toContain("/static/session-card.js");
   });
 
+  it("review's return address survives editor → Evolve → editor; hostile values are dropped", async () => {
+    const ret = `/?ahead=1&topic=${tid}`;
+    const enc = encodeURIComponent(ret);
+    const escaped = ret.replace("&", "&amp;");
+
+    // Editor opened from review forwards the address on its Evolve link.
+    const editor = await (await exports.default.fetch(`http://sr/prompt/${pid}?return=${enc}`, AUTH)).text();
+    expect(editor).toContain(`id="evolve-prompt" href="/evolve/${pid}?return=${enc}"`);
+
+    // Evolve page keeps it on the breadcrumb and hands it to the client, nav stays on Review.
+    const html = await (await exports.default.fetch(`http://sr/evolve/${pid}?return=${enc}`, AUTH)).text();
+    expect(html).toContain(`class="crumb" href="/prompt/${pid}?return=${enc}"`);
+    expect(html).toContain(`data-return="${escaped}"`);
+    expect(html).toContain('<a class="rail-item" href="/" aria-current="page" data-nav="review"');
+    expect(html).not.toContain('aria-current="page" data-nav="browse"');
+
+    // Without one, nothing is added.
+    const plain = await (await exports.default.fetch(`http://sr/evolve/${pid}`, AUTH)).text();
+    expect(plain).toContain(`class="crumb" href="/prompt/${pid}"`);
+    expect(plain).not.toContain("data-return=");
+    expect(plain).not.toContain("?return=");
+
+    // Only review urls are honoured; the raw value is never echoed.
+    for (const evil of ["https://evil.example/", "//evil.example/", "/browse", "javascript:alert(1)", `/prompt/${pid}`]) {
+      const h = await (await exports.default.fetch(`http://sr/evolve/${pid}?return=${encodeURIComponent(evil)}`, AUTH)).text();
+      expect(h).not.toContain("data-return=");
+      expect(h).not.toContain("?return=");
+      expect(h).not.toContain("evil.example");
+    }
+    const junk = await (await exports.default.fetch(
+      `http://sr/evolve/${pid}?return=${encodeURIComponent("/?topic=x%22%3E%3Cscript%3E&junk=1")}`, AUTH)).text();
+    expect(junk).toContain('data-return="/"');
+    expect(junk).not.toContain("<script>");
+  });
+
   it("unknown prompt is 404 for the page and every endpoint", async () => {
     const nope = "zzzzzzzzzz";
     expect((await exports.default.fetch(`http://sr/evolve/${nope}`, AUTH)).status).toBe(404);

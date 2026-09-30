@@ -13,6 +13,7 @@ import { normalizePromptInput, validatePromptInput } from "../format";
 import { newCardFields } from "../scheduler";
 import { renderPromptAnswer, renderPromptQuestion, renderSourceLine } from "../markdown";
 import { escapeHtml, page, shellFor } from "../html";
+import { reviewReturnHref, withReturn } from "./browse";
 import { getTutorConfig } from "../tutor/config";
 import { createModel } from "../tutor/provider";
 import { sessionStore } from "../tutor/session";
@@ -55,10 +56,14 @@ async function saveQuietly(env: Env, log: SessionLog): Promise<boolean> {
 // Page
 // ---------------------------------------------------------------------------
 
-export async function evolvePage(id: string, env: Env): Promise<Response> {
+export async function evolvePage(id: string, request: Request, env: Env): Promise<Response> {
   const p = await loadPrompt(env, id);
   if (!p) return new Response("not found", { status: 404 });
-  const shell = await shellFor(env.DB, "browse");
+  // Opened from review → Edit → Evolve: keep the session's return address so the editor
+  // still goes back to review afterwards. Re-validated here; the raw query is never echoed.
+  const returnTo = reviewReturnHref(new URL(request.url).searchParams.get("return"));
+  const editorHref = withReturn(`/prompt/${p.id}`, returnTo);
+  const shell = await shellFor(env.DB, returnTo ? "review" : "browse");
   const topic = await env.DB.prepare("SELECT name FROM topics WHERE id = ?").bind(p.topic_id).first<TopicRow>();
   const config = await getTutorConfig(env.DB);
 
@@ -73,13 +78,13 @@ export async function evolvePage(id: string, env: Env): Promise<Response> {
 </div>`;
 
   const conversation = config
-    ? `<div id="evolve" data-prompt-id="${escapeHtml(p.id)}" data-topic-id="${escapeHtml(p.topic_id)}" data-updated-at="${escapeHtml(p.updated_at)}"></div>`
+    ? `<div id="evolve" data-prompt-id="${escapeHtml(p.id)}" data-topic-id="${escapeHtml(p.topic_id)}" data-updated-at="${escapeHtml(p.updated_at)}"${returnTo ? ` data-return="${escapeHtml(returnTo)}"` : ""}></div>`
     : `<div class="card context-card evo-unconfigured">
   <p class="context-text">The tutor isn't configured. Add a provider key in <a href="/settings">Settings → Tutor</a>.</p>
 </div>`;
 
   const body = `
-<a class="crumb" href="/prompt/${escapeHtml(p.id)}"><i class="ph ph-arrow-left"></i> Edit prompt</a>
+<a class="crumb" href="${escapeHtml(editorHref)}"><i class="ph ph-arrow-left"></i> Edit prompt</a>
 <h1 class="page-title">Evolve</h1>
 ${context}
 ${conversation}`;

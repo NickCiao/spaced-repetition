@@ -185,6 +185,11 @@ export function reviewReturnHref(raw: string | null): string | null {
   return s ? `/?${s}` : "/";
 }
 
+/** `path` plus `?return=<validated review url>` when there is one — the same address the editor was opened with. */
+export function withReturn(path: string, returnTo: string | null): string {
+  return returnTo ? `${path}?return=${encodeURIComponent(returnTo)}` : path;
+}
+
 export async function promptForm(idOrNew: string, request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const returnTo = idOrNew === "new" ? null : reviewReturnHref(url.searchParams.get("return"));
@@ -258,7 +263,7 @@ ${flagCard}
 <div id="preview"></div>
 </div>
 ${p ? `<div class="danger">
-  <a class="btn btn-secondary" id="evolve-prompt" href="/evolve/${p.id}"><i class="ph ph-sparkle"></i> Evolve</a>
+  <a class="btn btn-secondary" id="evolve-prompt" href="${escapeHtml(withReturn(`/evolve/${p.id}`, returnTo))}"><i class="ph ph-sparkle"></i> Evolve</a>
   <p class="danger-note">Talk it over with the tutor: find gaps, get follow-on prompts, decide whether to keep it.</p>
   <button type="button" class="btn btn-secondary" id="retire-prompt" data-retired="${p.retired ? "1" : "0"}">${p.retired ? "Restore to review" : "Retire"}</button>
   <p class="danger-note" id="retire-note">${p.retired ? "Retired: hidden from review. Restoring keeps its schedule and history." : "Hides this prompt from review. Recoverable: its schedule and history are kept."}</p>

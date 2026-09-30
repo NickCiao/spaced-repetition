@@ -74,7 +74,7 @@ export default {
     const promptRetireMatch = url.pathname.match(/^\/api\/prompt\/([a-z0-9]{10})\/retire$/);
     if (promptRetireMatch && request.method === "POST") return retirePrompt(promptRetireMatch[1], request, env);
     const evolveMatch = url.pathname.match(/^\/evolve\/([a-z0-9]{10})$/);
-    if (evolveMatch && request.method === "GET") return evolvePage(evolveMatch[1], env);
+    if (evolveMatch && request.method === "GET") return evolvePage(evolveMatch[1], request, env);
     const evolveApi = url.pathname.match(/^\/api\/evolve\/([a-z0-9]{10})\/(start|turn|accept|discard|fate|worth)$/);
     if (evolveApi && request.method === "POST") {
       const [, evolveId, op] = evolveApi;
