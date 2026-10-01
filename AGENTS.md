@@ -29,11 +29,11 @@ Single-user spaced-repetition app: capture → refine → review → export/impo
 
 **Workflow:** never commit to `main` or edit in the main checkout; every change is made in its own worktree and lands through a PR. Run the whole loop without waiting to be asked:
 1. **Start:** `git fetch origin && git worktree add --no-track -b <type>/<topic> .worktrees/<type>-<topic> origin/main`. In it: `cp ../../.dev.vars .`, `npm install` (`npm run migrate:local` only to run the dev server). Work and commit there; `npm test` before committing. Start every shell command with `cd <worktree> &&`; the shell's working directory can silently fall back to the main checkout.
-2. **PR:** `git push -u origin HEAD`, then `gh pr create --base main` with Why / What / Verification.
+2. **PR:** `git push origin HEAD` (no `-u`: an upstream makes `git branch -d` check the remote branch, which step 5 deletes), then `gh pr create --base main --head <branch>` with Why / What / Verification.
 3. **Review:** read `gh pr diff` against "Do not violate", "When changing", and docs consistency; `gh pr checks --watch`. Post the findings with `gh pr comment`, each marked fixed or declined with the reason.
-4. **Fix:** commit fixes, push, re-review, wait for CI again.
+4. **Fix:** commit fixes, `git push origin HEAD`, re-review, wait for CI again.
 5. **Merge:** `gh pr merge --merge` (not `--delete-branch`: it tries to check out `main`, which fails inside a worktree), then `git push origin --delete <branch>`.
-6. **Clean up:** from the main checkout, `git worktree remove .worktrees/<dir>` and `git branch -D <branch>`.
-7. **Update main:** `git pull --ff-only` if the main checkout is on `main`, otherwise `git fetch origin main:main`.
+6. **Update main:** `git pull --ff-only` if the main checkout is on `main`, otherwise `git fetch origin main:main`.
+7. **Clean up:** from the main checkout, `git worktree remove .worktrees/<dir>` and `git branch -d <branch>`. `-d` checks the merge against the checked-out branch; if that isn't `main`, confirm with `git merge-base --is-ancestor <branch> main` and ask before using `-D`.
 
 Stop and ask instead of merging if review finds something you can't fix confidently, or CI fails for reasons outside the change. Work on a long-lived feature branch (e.g. `feature/prompt-evolution`) runs the same loop with that branch in place of `main`; never merge the feature branch itself into `main` without asking.
