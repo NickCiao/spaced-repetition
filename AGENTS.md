@@ -33,4 +33,4 @@ Single-user spaced-repetition app: capture → refine → review → export/impo
 3. Review your own PR: read `gh pr diff` against "Do not violate", "When changing", and docs consistency; `gh pr checks --watch`. Fix findings as new commits on the branch and re-review.
 4. `gh pr merge --merge --delete-branch`, then `git checkout main && git pull --ff-only`.
 
-Stop and ask instead of merging if review finds something you can't fix confidently, or CI fails for reasons outside the change. Long-lived feature branches (e.g. `feature/prompt-evolution`) take PRs into themselves; never merge one into `main` without asking.
+Stop and ask instead of merging if review finds something you can't fix confidently, or CI fails for reasons outside the change. Work on a long-lived feature branch (e.g. `feature/prompt-evolution`) runs the same loop with that branch in place of `main`; never merge the feature branch itself into `main` without asking.
