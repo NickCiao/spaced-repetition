@@ -28,7 +28,7 @@ Single-user spaced-repetition app: capture → refine → review → export/impo
 **When changing:** new routes → `src/routes/` + wire `index.ts` + test. Schema → new `migrations/` file. Use `escapeHtml()`, parameterized SQL, `nowIso()` for timestamps. Deploy script must keep remote migrations on the D1 **binding** name (`DB`) so the Deploy to Cloudflare button works when users rename the database.
 
 **Workflow:** never commit to `main` or edit in the main checkout; every change is made in its own worktree and lands through a PR. Run the whole loop without waiting to be asked:
-1. **Start:** `git fetch origin && git worktree add --no-track -b <type>/<topic> .worktrees/<type>-<topic> origin/main`. In it: `cp ../../.dev.vars .`, `npm install` (`npm run migrate:local` only to run the dev server). Work and commit there; `npm test` before committing.
+1. **Start:** `git fetch origin && git worktree add --no-track -b <type>/<topic> .worktrees/<type>-<topic> origin/main`. In it: `cp ../../.dev.vars .`, `npm install` (`npm run migrate:local` only to run the dev server). Work and commit there; `npm test` before committing. Start every shell command with `cd <worktree> &&`; the shell's working directory can silently fall back to the main checkout.
 2. **PR:** `git push -u origin HEAD`, then `gh pr create --base main` with Why / What / Verification.
 3. **Review:** read `gh pr diff` against "Do not violate", "When changing", and docs consistency; `gh pr checks --watch`. Post the findings with `gh pr comment`, each marked fixed or declined with the reason.
 4. **Fix:** commit fixes, push, re-review, wait for CI again.
