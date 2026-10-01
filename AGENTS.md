@@ -27,10 +27,13 @@ Single-user spaced-repetition app: capture → refine → review → export/impo
 
 **When changing:** new routes → `src/routes/` + wire `index.ts` + test. Schema → new `migrations/` file. Use `escapeHtml()`, parameterized SQL, `nowIso()` for timestamps. Deploy script must keep remote migrations on the D1 **binding** name (`DB`) so the Deploy to Cloudflare button works when users rename the database.
 
-**Shipping:** never commit or merge to `main` locally; every change lands through a PR. Once the work is done, run this loop to the end without waiting to be asked:
-1. Branch off fresh `main` (`git checkout main && git pull --ff-only && git checkout -b <type>/<topic>`), `npm test`, commit.
-2. `git push -u origin HEAD`, then `gh pr create --base main` with Why / What / Verification.
-3. Review your own PR: read `gh pr diff` against "Do not violate", "When changing", and docs consistency; `gh pr checks --watch`. Fix findings as new commits on the branch and re-review.
-4. `gh pr merge --merge --delete-branch`, then `git checkout main && git pull --ff-only`.
+**Workflow:** never commit to `main` or edit in the main checkout; every change is made in its own worktree and lands through a PR. Run the whole loop without waiting to be asked:
+1. **Start:** `git fetch origin && git worktree add --no-track -b <type>/<topic> .worktrees/<type>-<topic> origin/main`. In it: `cp ../../.dev.vars .`, `npm install` (`npm run migrate:local` only to run the dev server). Work and commit there; `npm test` before committing.
+2. **PR:** `git push -u origin HEAD`, then `gh pr create --base main` with Why / What / Verification.
+3. **Review:** read `gh pr diff` against "Do not violate", "When changing", and docs consistency; `gh pr checks --watch`. Post the findings with `gh pr comment`, each marked fixed or declined with the reason.
+4. **Fix:** commit fixes, push, re-review, wait for CI again.
+5. **Merge:** `gh pr merge --merge` (not `--delete-branch`: it tries to check out `main`, which fails inside a worktree), then `git push origin --delete <branch>`.
+6. **Clean up:** from the main checkout, `git worktree remove .worktrees/<dir>` and `git branch -D <branch>`.
+7. **Update main:** `git pull --ff-only` if the main checkout is on `main`, otherwise `git fetch origin main:main`.
 
 Stop and ask instead of merging if review finds something you can't fix confidently, or CI fails for reasons outside the change. Work on a long-lived feature branch (e.g. `feature/prompt-evolution`) runs the same loop with that branch in place of `main`; never merge the feature branch itself into `main` without asking.
