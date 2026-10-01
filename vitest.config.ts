@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig(async () => {
   const migrations = await readD1Migrations(fileURLToPath(new URL("./migrations", import.meta.url)));
@@ -22,6 +22,8 @@ export default defineConfig(async () => {
       })
     ],
     test: {
+      // Each worktree under .worktrees/ is a full checkout with its own test/ dir.
+      exclude: [...configDefaults.exclude, ".worktrees/**"],
       // Storage is isolated per test file (the plugin's v1 model); within a file, tests
       // run in order and build on each other's rows. The setup file applies migrations.
       setupFiles: ["./test/apply-migrations.ts"]

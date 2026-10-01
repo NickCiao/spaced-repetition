@@ -4,3 +4,4 @@ dist/
 .superpowers/
 .dev.vars
 test_import_data/
+.worktrees/
