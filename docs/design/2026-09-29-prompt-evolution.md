@@ -101,6 +101,7 @@ Rollback is `git checkout main && npm run deploy`. Left behind: inert settings r
 | Loop runs long | `stopWhen` caps steps (12); proposals cap at 5; streaming keeps the page alive |
 | Accept races a concurrent edit of the original | Edit proposals carry the `updated_at` they were drafted against; stale → rejected with "prompt changed, re-open" |
 | Session log write fails | Accepts still succeed (they write D1 first); the log is best-effort and says so |
+| Accept / discard / fate / worth while a turn is still streaming | The page queues them until the turn ends, so only one request touches the log at a time (a proposal shown mid-turn isn't in the log until then). The server is safe without that: every write loads the latest log and applies only its own change, and a turn adds only what it appended, so neither side erases the other |
 
 ## 8. Testing
 

@@ -1,6 +1,27 @@
 import { newId, nowIso } from "../db";
 import { sessionKey, type SessionLog, type SessionStore } from "./types";
 
+/** How long the log's lists were when a turn started; the turn's additions come after. */
+export type TurnMark = { messages: number; proposals: number; turns: number };
+
+export const turnMark = (log: SessionLog): TurnMark =>
+  ({ messages: log.messages.length, proposals: log.proposals.length, turns: log.turns.length });
+
+/**
+ * Replay one turn's additions onto the latest stored log. A turn holds its own copy for
+ * the whole stream while accept / discard / fate / worth save theirs, so saving that copy
+ * as-is would erase their changes. A turn only appends (messages, proposals, turns) and
+ * sets `skipped` and `fate.recommended`; the user-gated endpoints only settle a proposal,
+ * `fate.chosen` and `worthIt`. The two never write the same field.
+ */
+export function mergeTurn(latest: SessionLog, mark: TurnMark, turn: SessionLog): void {
+  latest.messages.push(...turn.messages.slice(mark.messages));
+  latest.proposals.push(...turn.proposals.slice(mark.proposals));
+  latest.turns.push(...turn.turns.slice(mark.turns));
+  if (turn.skipped) latest.skipped = true;
+  if (turn.fate.recommended) latest.fate.recommended = turn.fate.recommended;
+}
+
 const ID_RE = /^[a-z0-9]{10}$/;
 
 function assertId(id: string, what: string): void {
