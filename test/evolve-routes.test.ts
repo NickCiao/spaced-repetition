@@ -426,3 +426,66 @@ describe("evolve: fate and worth", () => {
     expect(log.fate.chosenAt).toBe(row?.updated_at);
   });
 });
+
+describe("evolve: session log under overlapping requests", () => {
+  // A model whose reply stays open until the test releases it, so other requests can
+  // land while a turn is still streaming (the turn loaded the log before they ran).
+  function heldModel() {
+    let release!: () => void;
+    const held = new Promise<void>(r => { release = r; });
+    const model = new MockLanguageModelV4({
+      doStream: async () => ({
+        stream: new ReadableStream({
+          async start(c) {
+            c.enqueue({ type: "stream-start" as const, warnings: [] });
+            c.enqueue({ type: "text-start" as const, id: "t1" });
+            c.enqueue({ type: "text-delta" as const, id: "t1", delta: "Thinking it over." });
+            await held;
+            c.enqueue({ type: "text-end" as const, id: "t1" });
+            c.enqueue({ type: "finish" as const, finishReason: { unified: "stop" as const, raw: "stop" }, usage });
+            c.close();
+          }
+        })
+      })
+    });
+    return { model, release };
+  }
+
+  it("accept, fate and worth sent while a turn streams survive that turn's save", async () => {
+    await setSetting(env.DB, "anthropic_api_key", "k");
+    const rid = newId();
+    const ts = nowIso();
+    await insertPromptStmt(env.DB, {
+      id: rid, topic_id: tid, kind: "qa", question: "What is a quorum?", answer: "Any majority",
+      position: 9, created_at: ts, updated_at: ts
+    }, newCardFields(new Date())).run();
+    const { sessionId } = await startSession(rid);
+    const proposalId = await withProposal(rid, sessionId, {
+      id: newId(), kind: "new", promptKind: "qa", question: "Why a majority?", answer: "Two majorities overlap",
+      move: "deepen", rationale: "r", status: "open"
+    });
+
+    const { model, release } = heldModel();
+    __setModelOverride(() => model);
+    try {
+      const turn = await POST(`/api/evolve/${rid}/turn`, { session: sessionId, message: "Overlap?" });
+      expect(turn.status).toBe(200);
+      expect((await POST(`/api/evolve/${rid}/accept`, { session: sessionId, proposal_id: proposalId })).status).toBe(200);
+      expect((await POST(`/api/evolve/${rid}/fate`, { session: sessionId, fate: "keep" })).status).toBe(200);
+      expect((await POST(`/api/evolve/${rid}/worth`, { session: sessionId, worth_it: true })).status).toBe(200);
+      release();
+      expect(parseSse(await turn.text()).at(-1)?.type).toBe("done");
+    } finally {
+      __setModelOverride(() => mockModel);
+    }
+
+    const log = await loadLog(rid, sessionId);
+    expect(log.proposals.find(p => p.id === proposalId)?.status).toBe("accepted");
+    expect(log.fate.chosen).toBe("keep");
+    expect(log.worthIt).toBe(true);
+    // ...and the turn's own additions are there too.
+    expect(log.turns).toHaveLength(2);
+    expect(log.turns[1].userMessage).toBe("Overlap?");
+    expect(log.messages.some(m => m.role === "user" && m.content === "Overlap?")).toBe(true);
+  });
+});

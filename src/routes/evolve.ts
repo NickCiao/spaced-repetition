@@ -16,11 +16,11 @@ import { escapeHtml, page, shellFor } from "../html";
 import { reviewReturnHref, withReturn } from "./browse";
 import { getTutorConfig } from "../tutor/config";
 import { createModel } from "../tutor/provider";
-import { sessionStore } from "../tutor/session";
+import { mergeTurn, sessionStore, turnMark } from "../tutor/session";
 import { lineage } from "../tutor/lineage";
 import { runTurn } from "../tutor/loop";
 import {
-  sessionKey, type Fate, type RunTurnInput, type SessionLog, type TurnEvent, type TutorConfig
+  sessionKey, type Fate, type ProposalStatus, type RunTurnInput, type SessionLog, type TurnEvent, type TutorConfig
 } from "../tutor/types";
 
 const ID_RE = /^[a-z0-9]{10}$/;
@@ -40,17 +40,36 @@ async function loadSession(env: Env, promptId: string, sessionId: unknown): Prom
   return log;
 }
 
-/** The log is the experiment's dataset, not the source of truth for prompts: a failed save never fails the request. */
-async function saveQuietly(env: Env, log: SessionLog): Promise<boolean> {
+/**
+ * Apply one change to the latest stored log and save it. Requests overlap — a turn streams
+ * for seconds while the user accepts, discards or answers — so each writes only its own
+ * change onto a fresh copy rather than saving the copy it loaded earlier.
+ * The log is the experiment's dataset, not the source of truth for prompts: a failed save
+ * never fails the request.
+ */
+async function updateQuietly(
+  env: Env, promptId: string, sessionId: string, change: (log: SessionLog) => void
+): Promise<boolean> {
   try {
-    log.updatedAt = nowIso();
-    await sessionStore.save(env, log);
+    const latest = await sessionStore.load(env, promptId, sessionId);
+    if (!latest) throw new Error("session log missing");
+    change(latest);
+    await sessionStore.save(env, latest);
     return true;
   } catch (err) {
-    console.error("evolve: session log save failed", log.id, err);
+    console.error("evolve: session log save failed", sessionId, err);
     return false;
   }
 }
+
+type Outcome = { status: ProposalStatus; finalQuestion?: string; finalAnswer?: string; acceptedPromptId?: string };
+
+/** Record what the user did with a proposal (see updateQuietly). */
+const settle = (env: Env, log: SessionLog, proposalId: string, outcome: Outcome): Promise<boolean> =>
+  updateQuietly(env, log.promptId, log.id, latest => {
+    const p = latest.proposals.find(x => x.id === proposalId);
+    if (p) Object.assign(p, outcome);
+  });
 
 // ---------------------------------------------------------------------------
 // Page
@@ -112,6 +131,8 @@ function streamTurn(
         catch { open = false; } // client went away; keep draining so the log still gets saved
       };
       let finalLog: SessionLog = log;
+      const mark = turnMark(log);
+      const saveTurn = () => updateQuietly(env, log.promptId, log.id, latest => mergeTurn(latest, mark, finalLog));
       try {
         if (announceSession) send({ type: "session", id: log.id });
         const turn = runTurn({ env, model: createModel(config), log, input, now: new Date() });
@@ -120,14 +141,14 @@ function streamTurn(
         for await (const e of turn.events) send(e);
         finalLog = await turn.done;
         // Persist before closing: the client may POST its next turn the moment `done` lands.
-        if (!(await saveQuietly(env, finalLog))) {
+        if (!(await saveTurn())) {
           send({ type: "error", message: "The session log could not be saved; this session may not continue." });
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error("evolve: turn failed", log.id, err);
         send({ type: "error", message });
-        await saveQuietly(env, finalLog); // keep whatever the loop recorded (turn error included)
+        await saveTurn(); // keep whatever the loop recorded (turn error included)
       } finally {
         open = false;
         try { controller.close(); } catch { /* already closed */ }
@@ -214,11 +235,9 @@ export async function evolveAccept(id: string, request: Request, env: Env): Prom
     await lineage.append(env.DB, {
       child, parent: p.id, move: proposal.move, ts, session: sessionKey(p.id, log.id)
     });
-    proposal.status = "accepted";
-    proposal.finalQuestion = question;
-    proposal.finalAnswer = answer;
-    proposal.acceptedPromptId = child;
-    await saveQuietly(env, log);
+    await settle(env, log, proposal.id, {
+      status: "accepted", finalQuestion: question, finalAnswer: answer, acceptedPromptId: child
+    });
     return Response.json({ ok: true, prompt_id: child });
   }
 
@@ -227,10 +246,7 @@ export async function evolveAccept(id: string, request: Request, env: Env): Prom
     "UPDATE prompts SET question=?, answer=?, updated_at=? WHERE id=? AND updated_at=?"
   ).bind(question, answer, ts, p.id, proposal.basedOnUpdatedAt).run();
   if (!res.meta.changes) return Response.json({ error: "prompt changed, re-open" }, { status: 409 });
-  proposal.status = "accepted";
-  proposal.finalQuestion = question;
-  proposal.finalAnswer = answer;
-  await saveQuietly(env, log);
+  await settle(env, log, proposal.id, { status: "accepted", finalQuestion: question, finalAnswer: answer });
   return Response.json({ ok: true, prompt_id: p.id, updated_at: ts });
 }
 
@@ -247,8 +263,7 @@ export async function evolveDiscard(id: string, request: Request, env: Env): Pro
   const proposal = log.proposals.find(x => x.id === b.proposal_id);
   if (!proposal) return Response.json({ error: "unknown proposal" }, { status: 404 });
   if (proposal.status !== "open") return Response.json({ error: `proposal already ${proposal.status}` }, { status: 409 });
-  proposal.status = "discarded";
-  await saveQuietly(env, log);
+  await settle(env, log, proposal.id, { status: "discarded" });
   return Response.json({ ok: true });
 }
 
@@ -277,9 +292,10 @@ export async function evolveFate(id: string, request: Request, env: Env): Promis
       ).bind(ts, p.id, elapsed)
     ]);
   }
-  log.fate.chosen = fate;
-  log.fate.chosenAt = ts;
-  await saveQuietly(env, log);
+  await updateQuietly(env, p.id, log.id, latest => {
+    latest.fate.chosen = fate;
+    latest.fate.chosenAt = ts;
+  });
   return Response.json({ ok: true, retired: fate === "retire" });
 }
 
@@ -293,7 +309,7 @@ export async function evolveWorth(id: string, request: Request, env: Env): Promi
   if (!ID_RE.test(id)) return notFound();
   const log = await loadSession(env, id, b.session);
   if (!log) return Response.json({ error: "unknown session" }, { status: 404 });
-  log.worthIt = b.worth_it;
-  await saveQuietly(env, log);
+  const worthIt = b.worth_it;
+  await updateQuietly(env, id, log.id, latest => { latest.worthIt = worthIt; });
   return Response.json({ ok: true });
 }

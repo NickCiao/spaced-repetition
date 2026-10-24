@@ -42,12 +42,25 @@
   };
   const scrollToEnd = () => window.scrollTo({ top: document.documentElement.scrollHeight });
 
-  async function postJson(url, body) {
-    const res = await fetch(url, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  // One request at a time touches the session log. A turn holds its copy of the log until it
+  // ends, and a proposal shown mid-turn is only saved then, so Accept / Discard / Keep /
+  // Retire / worth pressed while the tutor is still talking wait for the turn to finish.
+  let logQueue = Promise.resolve();
+  function serial(fn) {
+    const run = logQueue.then(fn);
+    logQueue = run.catch(() => {});
+    return run;
+  }
+  const waitNote = () => (streaming ? "Saves when the tutor finishes…" : "");
+
+  function postJson(url, body) {
+    return serial(async () => {
+      const res = await fetch(url, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+      });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, data };
     });
-    const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, status: res.status, data };
   }
 
   // ── thread rendering ──────────────────────────────────────────────────
@@ -129,11 +142,16 @@
     thread.appendChild(card);
     scrollToEnd();
 
-    const lock = (on) => { accept.disabled = on; discard.disabled = on; };
+    // Fields lock too: an Accept can wait for the turn, and it sends the text as it was when pressed.
+    const lock = (on) => {
+      accept.disabled = discard.disabled = on;
+      q.ta.readOnly = on;
+      if (a) a.ta.readOnly = on;
+    };
 
     accept.onclick = async () => {
-      flash.textContent = "";
       lock(true);
+      flash.textContent = waitNote();
       try {
         const { ok, data } = await postJson(api("accept"), {
           session: sessionId, proposal_id: p.id, question: q.ta.value, answer: a ? a.ta.value : ""
@@ -141,6 +159,7 @@
         if (!ok) { flash.textContent = data.error || "Couldn't save."; lock(false); return; }
         q.ta.readOnly = true;
         if (a) a.ta.readOnly = true;
+        flash.textContent = "";
         actions.replaceChildren(el("span", "evo-saved", "Saved ✓"));
         if (isNew && data.prompt_id) {
           const link = el("a", "btn btn-ghost", "Open prompt");
@@ -154,8 +173,8 @@
     };
 
     discard.onclick = async () => {
-      flash.textContent = "";
       lock(true);
+      flash.textContent = waitNote();
       try {
         const { ok, data } = await postJson(api("discard"), { session: sessionId, proposal_id: p.id });
         if (!ok) { flash.textContent = data.error || "Couldn't discard."; lock(false); return; }
@@ -187,11 +206,12 @@
     scrollToEnd();
 
     const choose = async (fate) => {
-      flash.textContent = "";
       keep.disabled = retire.disabled = true;
+      flash.textContent = waitNote();
       try {
         const { ok, data } = await postJson(api("fate"), { session: sessionId, fate });
         if (!ok) { flash.textContent = data.error || "Couldn't save."; keep.disabled = retire.disabled = false; return; }
+        flash.textContent = "";
         actions.replaceChildren(el("span", "evo-saved", data.retired ? "Retired. Hidden from review; history kept." : "Kept."));
         askWorth(card);
       } catch (err) {
@@ -218,8 +238,8 @@
     scrollToEnd();
 
     const answer = async (worth) => {
-      flash.textContent = "";
       yes.disabled = no.disabled = true;
+      flash.textContent = waitNote();
       try {
         const { ok, data } = await postJson(api("worth"), { session: sessionId, worth_it: worth });
         if (!ok) { flash.textContent = data.error || "Couldn't save."; yes.disabled = no.disabled = false; return; }
@@ -288,35 +308,39 @@
     handleEvent(ev);
   }
 
+  async function readTurn(op, body) {
+    const res = await fetch(api(op), {
+      method: "POST",
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (!res.ok || !res.body) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `The tutor didn't answer (${res.status}).`);
+    }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) >= 0) {
+        handleChunk(buf.slice(0, idx));
+        buf = buf.slice(idx + 2);
+      }
+    }
+    buf += dec.decode();
+    if (buf.trim()) handleChunk(buf);
+  }
+
   async function runTurn(op, body) {
     if (streaming) return;
     setBusy(true);
     current = null;
     try {
-      const res = await fetch(api(op), {
-        method: "POST",
-        headers: body ? { "Content-Type": "application/json" } : {},
-        body: body ? JSON.stringify(body) : undefined
-      });
-      if (!res.ok || !res.body) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `The tutor didn't answer (${res.status}).`);
-      }
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let buf = "";
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        let idx;
-        while ((idx = buf.indexOf("\n\n")) >= 0) {
-          handleChunk(buf.slice(0, idx));
-          buf = buf.slice(idx + 2);
-        }
-      }
-      buf += dec.decode();
-      if (buf.trim()) handleChunk(buf);
+      await serial(() => readTurn(op, body));
     } catch (err) {
       showError(err.message || "Connection lost.");
     } finally {
